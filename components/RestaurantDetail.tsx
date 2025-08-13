@@ -330,11 +330,17 @@ Se nenhuma promoção ativa for encontrada, retorne APENAS a frase: "Nenhuma pro
                 },
             });
 
-            await onUpdatePromotions(restaurant.id, response.text.trim());
+            const resultText = response.text?.trim();
+            if (!resultText) {
+                throw new Error("A IA não retornou nenhuma informação. Tente novamente.");
+            }
+
+            await onUpdatePromotions(restaurant.id, resultText);
 
         } catch (error) {
             console.error("Error fetching promotions:", error);
-            alert("Ocorreu um erro ao buscar as promoções com a IA.");
+            const errorMessage = (error instanceof Error) ? error.message : "Ocorreu um erro desconhecido.";
+            alert(`Ocorreu um erro ao buscar as promoções com a IA: ${errorMessage}`);
         } finally {
             setIsFetchingPromotions(false);
         }

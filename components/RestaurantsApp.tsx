@@ -293,8 +293,11 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser }) => {
         if (error) {
              console.error('Error updating promotions:', error);
              alert('Erro ao salvar as promoções.');
+        } else {
+            // Manually refetch to ensure UI is up-to-date immediately
+            await fetchData();
         }
-    }, []);
+    }, [fetchData]);
     
     const handleSaveDatePlan = useCallback(async (planData: Omit<DatePlan, 'id' | 'created_at'>) => {
         const { error } = await supabase.from('date_plans').insert([planData]);
