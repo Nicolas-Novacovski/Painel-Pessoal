@@ -1,0 +1,64 @@
+
+[
+  {
+    "id": "exemplo-uuid-unico-1",
+    "name": "Café Aconchego",
+    "category": "Café",
+    "cuisine": "Brasileira",
+    "locations": [
+      {
+        "address": "Rua das Flores, 123 - Centro, Curitiba - PR",
+        "latitude": null,
+        "longitude": null
+      }
+    ],
+    "image": "https://images.unsplash.com/photo-1559925393-8be0ec4767c8?q=80&w=1974&auto=format&fit=crop",
+    "favoritedBy": ["Nicolas", "Ana Beatriz Diva Linda"],
+    "reviews": [
+      {
+        "user": "Nicolas",
+        "rating": 5,
+        "comment": "Melhor café da cidade! O ambiente é incrível."
+      },
+      {
+        "user": "Ana Beatriz Diva Linda",
+        "rating": 4.5,
+        "comment": "Adorei o bolo de cenoura, mas o café estava um pouco frio."
+      }
+    ],
+    "addedBy": "Nicolas",
+    "inTourOqfc": false,
+    "price_range": 2,
+    "google_rating": 4.8,
+    "google_rating_count": 120,
+    "google_rating_source_uri": null,
+    "google_rating_source_title": null,
+    "memories": [],
+    "menu_url": "https://www.instagram.com/p/Cexample1/"
+  },
+  {
+    "id": "exemplo-uuid-unico-2",
+    "name": "Cantina da Nona",
+    "category": "Jantar",
+    "cuisine": "Italiana",
+    "locations": [
+       {
+        "address": "Avenida Principal, 789 - Batel, Curitiba - PR",
+        "latitude": null,
+        "longitude": null
+      }
+    ],
+    "image": "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?q=80&w=1974&auto=format&fit=crop",
+    "favoritedBy": [],
+    "reviews": [],
+    "addedBy": "Ana Beatriz Diva Linda",
+    "inTourOqfc": true,
+    "price_range": 3,
+    "google_rating": 4.5,
+    "google_rating_count": 350,
+    "google_rating_source_uri": null,
+    "google_rating_source_title": null,
+    "memories": [],
+    "menu_url": null
+  }
+]

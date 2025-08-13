@@ -1,0 +1,10 @@
+{
+  "name": "Painel Pessoal",
+  "description": "Um painel pessoal para gerenciar restaurantes, planejamento de gastos e receitas.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation",
+    "microphone"
+  ],
+  "prompt": ""
+}

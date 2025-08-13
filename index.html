@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Painel Pessoal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://accounts.google.com/gsi/client" async></script>
+    <style>
+      @keyframes modal-fade-in {
+        from {
+          opacity: 0;
+          transform: translateY(-20px) scale(0.95);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
+      }
+      @keyframes unstick {
+        to {
+          opacity: 0;
+          transform: translateY(-200px) rotate(20deg) scale(0.7);
+        }
+      }
+      .animate-unstick {
+        animation: unstick 0.5s ease-in forwards;
+      }
+      .ribbon {
+        position: absolute;
+        top: 10px;
+        left: -30px;
+        z-index: 10;
+        background-color: #f59e0b; /* amber-500 */
+        color: white;
+        padding: 4px 0;
+        width: 120px;
+        text-align: center;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        transform: rotate(-45deg);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        line-height: 1.25;
+      }
+      @keyframes shake {
+        0%, 100% { transform: translateX(0) rotate(var(--rotation, 0deg)); }
+        10%, 30%, 50%, 70%, 90% { transform: translateX(-3px) rotate(calc(var(--rotation, 0deg) - 1.5deg)); }
+        20%, 40%, 60%, 80% { transform: translateX(3px) rotate(calc(var(--rotation, 0deg) + 1.5deg)); }
+      }
+      .animate-shake {
+        animation: shake 1s ease-in-out infinite;
+        border-color: #ef4444; /* red-500 */
+        border-width: 2px;
+        border-style: solid;
+      }
+      @keyframes pop-in {
+        0% { opacity: 0; transform: scale(0.5); }
+        70% { opacity: 1; transform: scale(1.05); }
+        100% { transform: scale(1); }
+      }
+      .animate-pop-in {
+        animation: pop-in 0.4s ease-out;
+      }
+      @keyframes fade-in {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      .animate-fade-in {
+        animation: fade-in 0.5s ease-out forwards;
+      }
+
+      body {
+        background-color: #f1f5f9;
+        background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23e2e8f0' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+      }
+       button:active, .button-active-effect:active {
+        transform: scale(0.96);
+        transition-duration: 0.1s;
+      }
+       /* For horizontal month scroller */
+      .month-selector-container {
+        -ms-overflow-style: none; /* IE and Edge */
+        scrollbar-width: none; /* Firefox */
+      }
+      .month-selector-container::-webkit-scrollbar {
+        display: none; /* Chrome, Safari and Opera */
+      }
+      .scroll-mask {
+        mask-image: linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,1) 5%, rgba(0,0,0,1) 95%, rgba(0,0,0,0) 100%);
+        -webkit-mask-image: linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,1) 5%, rgba(0,0,0,1) 95%, rgba(0,0,0,0) 100%);
+      }
+    </style>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              primary: '#0284c7', // sky-600
+              'primary-focus': '#0369a1', // sky-700
+              secondary: '#f1f5f9', // slate-100
+              accent: '#f59e0b', // amber-500
+              'accent-focus': '#d97706', // amber-600
+              dark: '#1e293b', // slate-800
+              partner: '#ec4899', // pink-500
+              'postit-yellow': { DEFAULT: '#fefcbf', 'text': '#3f3f46' },
+              'postit-pink': { DEFAULT: '#fbcfe8', 'text': '#4c0519' },
+              'postit-blue': { DEFAULT: '#dbeafe', 'text': '#1e3a8a' },
+              'postit-green': { DEFAULT: '#dcfce7', 'text': '#14532d' },
+            },
+            fontFamily: {
+              sans: ['Inter', 'sans-serif'],
+              hand: ['Caveat', 'cursive'],
+            },
+            boxShadow: {
+              'subtle': '0 4px 12px 0 rgba(0, 0, 0, 0.05)',
+              'subtle-hover': '0 8px 20px 0 rgba(0, 0, 0, 0.08)',
+              'postit': '0 4px 6px rgba(0,0,0,0.1)',
+            },
+            animation: {
+                'pop-in': 'pop-in 0.4s ease-out',
+                'fade-in': 'fade-in 0.5s ease-out',
+            },
+            keyframes: {
+                'pop-in': {
+                    '0%': { opacity: '0', transform: 'scale(0.5)' },
+                    '70%': { opacity: '1', transform: 'scale(1.05)' },
+                    '100%': { transform: 'scale(1)' },
+                },
+                'fade-in': {
+                    'from': { opacity: '0', transform: 'translateY(10px)' },
+                    'to': { opacity: '1', transform: 'translateY(0)' },
+                }
+            }
+          },
+        },
+      };
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Caveat:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://esm.sh/react@^19.1.1/",
+    "react": "https://esm.sh/react@^19.1.1",
+    "react-dom/": "https://esm.sh/react-dom@^19.1.1/",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.53.0",
+    "@google/genai": "https://esm.sh/@google/genai@^1.12.0",
+    "chart.js": "https://esm.sh/chart.js@^4.4.3",
+    "react-chartjs-2": "https://esm.sh/react-chartjs-2@^5.2.0"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body class="bg-slate-100 text-dark font-sans antialiased">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
