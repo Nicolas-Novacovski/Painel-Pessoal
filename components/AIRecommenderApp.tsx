@@ -1,9 +1,10 @@
-import React, { useState, useCallback } from 'react';
-import { UserProfile, AIRecommendation } from '../types';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { UserProfile, AIRecommendation, AIRecommenderHistoryItem } from '../types';
 import { Button, PriceRatingDisplay, StarRatingDisplay } from './UIComponents';
-import { GoogleGenAI } from "@google/genai";
-import { LightBulbIcon, SparklesIcon, MapPinIcon, StarIcon, TruckIcon, BuildingStorefrontIcon, ArrowPathIcon, GoogleIcon, PlusIcon } from './Icons';
+import { GoogleGenAI, Type } from "@google/genai";
+import { LightBulbIcon, SparklesIcon, MapPinIcon, StarIcon, TruckIcon, BuildingStorefrontIcon, ArrowPathIcon, GoogleIcon, PlusIcon, ClockIcon } from './Icons';
 import { supabase } from '../utils/supabase';
+import { useLocalStorage } from '../hooks/useLocalStorage';
 
 interface AIRecommenderAppProps {
     currentUser: UserProfile;
@@ -37,10 +38,10 @@ const LoadingState: React.FC = () => {
 
 const ResultCard: React.FC<{
     recommendation: AIRecommendation,
-    onTryAgain: () => void,
+    onNewSearch: () => void,
     onAddToMyList: (recommendation: AIRecommendation) => void,
     isAdding: boolean,
-}> = ({ recommendation, onTryAgain, onAddToMyList, isAdding }) => {
+}> = ({ recommendation, onNewSearch, onAddToMyList, isAdding }) => {
     return (
         <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden animate-fade-in">
             {recommendation.image_url && (
@@ -78,15 +79,14 @@ const ResultCard: React.FC<{
                     <Button onClick={() => onAddToMyList(recommendation)} variant="secondary" className="flex-1 !justify-center" disabled={isAdding}>
                        <PlusIcon className="w-5 h-5"/> {isAdding ? 'Adicionando...' : 'Adicionar à Minha Lista'}
                     </Button>
-                    <Button onClick={onTryAgain} variant="secondary" className="flex-1 !justify-center">
-                        <ArrowPathIcon className="w-5 h-5"/> Tentar Novamente
+                    <Button onClick={onNewSearch} variant="secondary" className="flex-1 !justify-center">
+                        <ArrowPathIcon className="w-5 h-5"/> Nova Busca
                     </Button>
                 </div>
             </div>
         </div>
     );
 };
-
 
 const AIRecommenderApp: React.FC<AIRecommenderAppProps> = ({ currentUser }) => {
     const [cravings, setCravings] = useState('');
@@ -96,69 +96,177 @@ const AIRecommenderApp: React.FC<AIRecommenderAppProps> = ({ currentUser }) => {
     const [recommendation, setRecommendation] = useState<AIRecommendation | null>(null);
     const [error, setError] = useState<string | null>(null);
 
-    const handleRecommend = useCallback(async () => {
-        if (!cravings.trim()) {
+    // New feature states
+    const [history, setHistory] = useLocalStorage<AIRecommenderHistoryItem[]>('aiRecommenderHistory', []);
+    const [suggestions, setSuggestions] = useState<string[]>([]);
+    const cravingsInputRef = useRef<HTMLTextAreaElement>(null);
+    const debounceTimeoutRef = useRef<number | null>(null);
+
+    const handleRecommend = useCallback(async (cravingsOverride?: string, exclusionsOverride?: string) => {
+        const cravingsToUse = cravingsOverride ?? cravings;
+        const exclusionsToUse = exclusionsOverride ?? exclusions;
+
+        if (!cravingsToUse.trim()) {
             setError("Por favor, diga o que você está com vontade de comer.");
             return;
         }
         setIsLoading(true);
         setError(null);
         setRecommendation(null);
+        setSuggestions([]);
 
-        try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-            
-            const prompt = `
-                Você é um assistente gourmet especialista em Curitiba. Baseado nos desejos e restrições do usuário, sua tarefa é recomendar um único restaurante na cidade. Use a busca do Google para obter informações atualizadas.
+        const maxRetries = 2;
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-                Desejos do usuário: "${cravings}"
-                Restrições (o que evitar): "${exclusions || 'Nenhuma'}"
+                const prompt = `
+                    Você é um assistente gourmet especialista em Curitiba. Baseado nos desejos e restrições do usuário, sua tarefa é recomendar um único restaurante na cidade. Use a busca do Google para obter informações atualizadas.
 
-                Sua resposta DEVE ser APENAS um objeto JSON válido, sem nenhum texto adicional, explicações ou formatação markdown.
+                    Desejos do usuário: "${cravingsToUse}"
+                    Restrições (o que evitar): "${exclusionsToUse || 'Nenhuma'}"
 
-                O objeto JSON deve ter a seguinte estrutura:
-                {
-                    "restaurant_name": "string",
-                    "category": "string",
-                    "reason": "Uma frase curta e convincente explicando por que esta é a recomendação perfeita baseada nos desejos do usuário.",
-                    "price_range": "number (1-4)",
-                    "delivery": "boolean",
-                    "dine_in": "boolean",
-                    "address": "string",
-                    "rating": "number | null",
-                    "image_url": "string | null",
-                    "maps_url": "string | null"
+                    Encontre a melhor opção e retorne APENAS um objeto JSON com as seguintes chaves: restaurant_name, category, reason, price_range (1-4), delivery (boolean), dine_in (boolean), address, rating (number|null), image_url (string|null), maps_url (string|null).
+                `;
+                
+                const response = await ai.models.generateContent({
+                    model: 'gemini-2.5-flash',
+                    contents: prompt,
+                    config: {
+                        tools: [{ googleSearch: {} }],
+                    },
+                });
+
+                let jsonString = response.text.trim();
+                const jsonMatch = jsonString.match(/```json\s*([\s\S]*?)\s*```|({[\s\S]*})/);
+                if (!jsonMatch) {
+                    throw new Error("A IA não retornou um JSON válido. Resposta: " + jsonString);
+                }
+                jsonString = jsonMatch[1] || jsonMatch[2];
+                const result = JSON.parse(jsonString) as AIRecommendation;
+                setRecommendation(result);
+
+                const newHistoryItem = { cravings: cravingsToUse, exclusions: exclusionsToUse };
+                setHistory(prev => {
+                    const filtered = prev.filter(h => h.cravings !== newHistoryItem.cravings || h.exclusions !== newHistoryItem.exclusions);
+                    return [newHistoryItem, ...filtered].slice(0, 5);
+                });
+
+                setIsLoading(false);
+                return;
+
+            } catch (e: any) {
+                console.error(`AI Recommender Error (Attempt ${attempt}):`, e);
+                const errorMessage = e?.message ? e.message.toString() : JSON.stringify(e);
+                const isInternalError = errorMessage.includes('500') || errorMessage.includes('INTERNAL');
+
+                if (isInternalError && attempt < maxRetries) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    continue;
                 }
 
-                Encontre a melhor opção e retorne o JSON.
-            `;
-            
+                setError("Oops! A IA se atrapalhou na cozinha. " + errorMessage);
+                setIsLoading(false);
+                return;
+            }
+        }
+    }, [cravings, exclusions, setHistory]);
+
+    const fetchSuggestions = useCallback(async (query: string) => {
+        try {
+            const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
+            const prompt = `Baseado no que o usuário está digitando para uma busca de restaurante: "${query}", gere até 5 sugestões curtas para autocompletar. As sugestões podem ser tipos de culinária, pratos específicos ou características (ex: "comida de boteco", "ambiente romântico"). Retorne um objeto JSON com uma chave "suggestions" que contém um array de strings.`;
+
             const response = await ai.models.generateContent({
                 model: 'gemini-2.5-flash',
                 contents: prompt,
                 config: {
-                     tools: [{googleSearch: {}}],
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: Type.OBJECT,
+                        properties: {
+                            suggestions: {
+                                type: Type.ARRAY,
+                                items: {
+                                    type: Type.STRING,
+                                },
+                            },
+                        },
+                    },
+                    thinkingConfig: { thinkingBudget: 0 } // Faster response for autocomplete
                 },
             });
 
-            const responseText = response.text.trim();
-            const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-            
-            if (!jsonMatch) {
-                throw new Error("A IA não retornou um JSON válido. Resposta recebida: " + responseText);
+            const result = JSON.parse(response.text.trim());
+            if (result.suggestions && Array.isArray(result.suggestions)) {
+                // Filter out suggestions that are already in the input to avoid redundancy
+                setSuggestions(result.suggestions.filter((s: string) => !query.toLowerCase().includes(s.toLowerCase())));
             }
-            
-            const result = JSON.parse(jsonMatch[0]) as AIRecommendation;
-            setRecommendation(result);
-
         } catch (e) {
-            console.error("AI Recommender Error:", e);
-            const errorMessage = (e instanceof Error) ? e.message : "Ocorreu um erro desconhecido.";
-            setError("Oops! A IA se atrapalhou na cozinha. " + errorMessage);
-        } finally {
-            setIsLoading(false);
+            console.error("Autocomplete fetch error:", e);
+            setSuggestions([]); // Clear suggestions on error
         }
-    }, [cravings, exclusions]);
+    }, []);
+
+    const debouncedFetchSuggestions = useCallback((query: string) => {
+        if (debounceTimeoutRef.current) {
+            clearTimeout(debounceTimeoutRef.current);
+        }
+        // Clear suggestions immediately and do not set a timeout if query is too short
+        if (query.trim().length < 3) {
+            setSuggestions([]);
+            return;
+        }
+        debounceTimeoutRef.current = window.setTimeout(() => {
+            fetchSuggestions(query);
+        }, 250); // Reduced delay for faster response
+    }, [fetchSuggestions]);
+
+
+    const handleCravingsChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        const value = e.target.value;
+        setCravings(value);
+        debouncedFetchSuggestions(value);
+    };
+    
+    const handleSuggestionClick = (suggestion: string) => {
+        setCravings(prev => {
+            const trimmedPrev = prev.trim();
+            const words = trimmedPrev.split(/\s+/);
+            const lastWord = words.pop() || '';
+
+            // Check if the suggestion is a completion of the last word
+            if (suggestion.toLowerCase().startsWith(lastWord.toLowerCase())) {
+                return [...words, suggestion].join(' ') + ' ';
+            } else {
+                return `${trimmedPrev} ${suggestion} `;
+            }
+        });
+        setSuggestions([]);
+        cravingsInputRef.current?.focus();
+    };
+    
+    const quickFilters = [
+        { label: '🍔 Lanches', prompt: "Encontre um restaurante em Curitiba especializado em lanches saborosos, como hambúrguer artesanal, sanduíches e acompanhamentos como batata frita. Priorize lugares bem avaliados, aconchegantes e com bom custo-benefício." },
+        { label: '🍣 Sushi', prompt: "Sugira um restaurante japonês em Curitiba com foco em sushi fresco, sashimi e combinados variados. Dê preferência a locais bem avaliados, com ambiente agradável e ingredientes de alta qualidade." },
+        { label: '🍕 Pizza', prompt: "Encontre uma pizzaria em Curitiba que sirva pizzas artesanais ou tradicionais, com variedade de sabores e boa reputação. Priorize ambientes confortáveis e preços justos." },
+        { label: '💖 Romântico', prompt: "Sugira um restaurante em Curitiba com atmosfera romântica, iluminação aconchegante e boa gastronomia, ideal para um jantar a dois. Pode ser de qualquer culinária, mas deve ter boas avaliações e ambiente intimista." },
+        { label: '🍝 Massas', prompt: "Encontre um restaurante italiano em Curitiba especializado em massas frescas e pratos típicos, como lasanha, nhoque e fettuccine. Priorize locais autênticos, bem avaliados e com boa carta de vinhos." },
+        { label: '🔁 Rodízio', prompt: "Sugira um restaurante em Curitiba famoso pelo seu rodízio, seja de carnes (churrascaria), pizza ou comida japonesa. Priorize locais com boas avaliações, variedade e um ambiente agradável." },
+        { label: '🍽️ Buffet', prompt: "Encontre um restaurante em Curitiba que ofereça um buffet por quilo ou livre de alta qualidade, ideal para o almoço. Busque por opções com variedade de saladas, pratos quentes e boa reputação." }
+    ];
+
+    const handleQuickFilterClick = (prompt: string) => {
+        setCravings(prompt);
+        setExclusions('');
+        cravingsInputRef.current?.focus();
+    };
+    
+    const handleHistoryClick = (item: AIRecommenderHistoryItem) => {
+        setCravings(item.cravings);
+        setExclusions(item.exclusions);
+        handleRecommend(item.cravings, item.exclusions);
+    };
 
     const handleAddToMyList = async (rec: AIRecommendation) => {
         if (!currentUser.couple_id) {
@@ -168,50 +276,27 @@ const AIRecommenderApp: React.FC<AIRecommenderAppProps> = ({ currentUser }) => {
         setIsAdding(true);
         
         try {
-            // Check if restaurant already exists by name
-            const { data: existing, error: findError } = await supabase
-                .from('restaurants')
-                .select('id')
-                .eq('name', rec.restaurant_name)
-                .maybeSingle();
-
+            const { data: existing, error: findError } = await supabase.from('restaurants').select('id').eq('name', rec.restaurant_name).maybeSingle();
             if(findError) throw findError;
-
             let restaurantId = existing?.id;
 
-            // If it doesn't exist, create it
             if (!restaurantId) {
                 const { data: newRestaurant, error: insertError } = await supabase
                     .from('restaurants')
                     .insert([{
-                        name: rec.restaurant_name,
-                        category: rec.category,
-                        cuisine: rec.category,
+                        name: rec.restaurant_name, category: rec.category, cuisine: rec.category,
                         locations: [{ address: rec.address, latitude: null, longitude: null }],
-                        image: rec.image_url,
-                        wants_to_go: [],
-                        reviews: [],
-                        addedBy: currentUser.name,
-                        price_range: rec.price_range,
-                        google_rating: rec.rating,
-                        google_rating_source_uri: rec.maps_url,
-                    }] as any)
-                    .select('id')
-                    .single();
-                
+                        image: rec.image_url, wants_to_go: [], reviews: [],
+                        addedBy: currentUser.name, price_range: rec.price_range,
+                        google_rating: rec.rating, google_rating_source_uri: rec.maps_url,
+                    }] as any).select('id').single();
                 if (insertError) throw insertError;
                 restaurantId = newRestaurant.id;
             }
 
-            // Link restaurant to the couple
-            const { error: linkError } = await supabase
-                .from('couple_restaurants')
-                .upsert({ couple_id: currentUser.couple_id, restaurant_id: restaurantId });
-            
+            const { error: linkError } = await supabase.from('couple_restaurants').upsert({ couple_id: currentUser.couple_id, restaurant_id: restaurantId });
             if (linkError) throw linkError;
-            
             alert(`${rec.restaurant_name} foi adicionado à sua lista!`);
-
         } catch(e) {
              const errorMessage = (e instanceof Error) ? e.message : "Erro desconhecido.";
              alert(`Não foi possível adicionar à lista: ${errorMessage}`);
@@ -220,8 +305,7 @@ const AIRecommenderApp: React.FC<AIRecommenderAppProps> = ({ currentUser }) => {
         }
     };
 
-
-    const handleTryAgain = () => {
+    const handleNewSearch = () => {
         setRecommendation(null);
         setError(null);
     }
@@ -229,7 +313,7 @@ const AIRecommenderApp: React.FC<AIRecommenderAppProps> = ({ currentUser }) => {
     return (
         <div className="p-4 sm:p-8 w-full min-h-screen flex items-center justify-center bg-slate-50/50">
             {isLoading ? <LoadingState /> :
-             recommendation ? <ResultCard recommendation={recommendation} onTryAgain={handleTryAgain} onAddToMyList={handleAddToMyList} isAdding={isAdding} /> :
+             recommendation ? <ResultCard recommendation={recommendation} onNewSearch={handleNewSearch} onAddToMyList={handleAddToMyList} isAdding={isAdding} /> :
              (
                 <div className="w-full max-w-2xl text-center">
                     <LightBulbIcon className="w-16 h-16 text-amber-400 mx-auto mb-4"/>
@@ -239,14 +323,37 @@ const AIRecommenderApp: React.FC<AIRecommenderAppProps> = ({ currentUser }) => {
                     <div className="space-y-4 text-left">
                         <div>
                              <label htmlFor="cravings" className="font-semibold text-slate-700">Me diga o que você quer...</label>
-                             <textarea
-                                id="cravings"
-                                value={cravings}
-                                onChange={(e) => setCravings(e.target.value)}
-                                rows={3}
-                                placeholder="Ex: algo com queijo derretido, crocante, finger food, não muito caro..."
-                                className="mt-1 w-full p-3 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition"
-                            />
+                             <div className="relative">
+                                <textarea
+                                    ref={cravingsInputRef}
+                                    id="cravings"
+                                    value={cravings}
+                                    onChange={handleCravingsChange}
+                                    rows={3}
+                                    placeholder="Ex: algo com queijo derretido, crocante, finger food, não muito caro..."
+                                    className="mt-1 w-full p-3 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition"
+                                />
+                                {suggestions.length > 0 && (
+                                    <div className="absolute z-10 w-full bg-white border border-slate-300 rounded-lg mt-1 shadow-lg p-1">
+                                        {suggestions.map(s => (
+                                            <button
+                                                key={s}
+                                                onClick={() => handleSuggestionClick(s)}
+                                                className="w-full text-left px-3 py-1.5 rounded-md hover:bg-slate-100"
+                                            >
+                                                {s}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                             </div>
+                             <div className="mt-2 flex flex-wrap gap-2">
+                                {quickFilters.map(filter => (
+                                    <button key={filter.label} onClick={() => handleQuickFilterClick(filter.prompt)} className="px-3 py-1 text-sm font-semibold rounded-full transition-colors duration-200 bg-slate-200 text-slate-700 hover:bg-slate-300">
+                                        {filter.label}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                          <div>
                              <label htmlFor="exclusions" className="font-semibold text-slate-700">Algo para evitar?</label>
@@ -262,8 +369,28 @@ const AIRecommenderApp: React.FC<AIRecommenderAppProps> = ({ currentUser }) => {
                     </div>
                     
                     {error && <p className="text-red-600 bg-red-100 p-3 rounded-lg mt-6">{error}</p>}
+                    
+                    {history.length > 0 && (
+                        <div className="mt-8 text-left">
+                            <h3 className="font-semibold text-slate-700 flex items-center gap-2 mb-2">
+                                <ClockIcon className="w-5 h-5"/>
+                                Buscas Recentes
+                            </h3>
+                            <div className="flex flex-wrap gap-2">
+                                {history.map((item, index) => (
+                                    <button 
+                                        key={index}
+                                        onClick={() => handleHistoryClick(item)}
+                                        className="px-3 py-1 text-sm font-medium rounded-full transition-colors duration-200 bg-white border border-slate-300 text-slate-600 hover:bg-slate-100 hover:border-slate-400"
+                                    >
+                                        {item.cravings}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
 
-                    <Button onClick={handleRecommend} size="lg" className="mt-8 !px-10 !py-4" disabled={isLoading}>
+                    <Button onClick={() => handleRecommend()} size="lg" className="mt-8 !px-10 !py-4" disabled={isLoading}>
                          <SparklesIcon className="w-6 h-6"/>
                         Me Surpreenda!
                     </Button>

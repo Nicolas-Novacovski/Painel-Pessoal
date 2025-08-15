@@ -1,8 +1,8 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Restaurant, Review, User, Location, Memory, DatePlan, UserProfile } from '../types';
 import { averageRating, slugify, compressImage } from '../utils/helpers';
-import { MapPinIcon, StarIcon, TrashIcon, UberIcon, PencilIcon, GoogleIcon, CameraIcon, PlusIcon, XMarkIcon, PlayIcon, HeartIcon, TagIcon, SparklesIcon, ChevronDownIcon, ArrowPathIcon } from './Icons';
-import { Button, PriceRatingDisplay, StarRatingDisplay, StarRatingInput, Modal, Input } from './UIComponents';
+import { MapPinIcon, StarIcon, TrashIcon, UberIcon, PencilIcon, GoogleIcon, CameraIcon, PlusIcon, XMarkIcon, PlayIcon, HeartIcon, TagIcon, SparklesIcon, ChevronDownIcon, ArrowPathIcon, CheckIcon } from './Icons';
+import { Button, PriceRatingDisplay, StarRatingDisplay, StarRatingInput, Modal, Input, PriceRatingInput } from './UIComponents';
 import DatePlannerForm from './DatePlannerForm';
 import { supabase } from '../utils/supabase';
 import { USERS } from '../constants';
@@ -12,6 +12,8 @@ interface RestaurantDetailProps {
     restaurant: Restaurant & { is_favorited: boolean };
     currentUser: UserProfile;
     onUpdateReview: (restaurantId: string, review: Review) => Promise<void>;
+    onUpdatePriceRange: (restaurantId: string, priceRange: number) => Promise<void>;
+    onUpdateGoogleRating: (restaurantId: string, rating: number | null, count: number | null) => Promise<void>;
     onUpdateMemories: (restaurantId: string, memories: Memory[]) => Promise<void>;
     onUpdatePromotions: (restaurantId: string, promotions: string) => Promise<void>;
     onSaveDatePlan: (plan: Omit<DatePlan, 'id' | 'created_at'>) => Promise<void>;
@@ -20,13 +22,18 @@ interface RestaurantDetailProps {
     onToggleFavorite: (id: string, currentState: boolean) => Promise<void>;
 }
 
-export const RestaurantDetail: React.FC<RestaurantDetailProps> = ({ restaurant, currentUser, onUpdateReview, onUpdateMemories, onUpdatePromotions, onSaveDatePlan, onEdit, onRemoveFromList, onToggleFavorite }) => {
+export const RestaurantDetail: React.FC<RestaurantDetailProps> = ({ restaurant, currentUser, onUpdateReview, onUpdatePriceRange, onUpdateGoogleRating, onUpdateMemories, onUpdatePromotions, onSaveDatePlan, onEdit, onRemoveFromList, onToggleFavorite }) => {
     // Review State
     const [rating, setRating] = useState(0);
     const [comment, setComment] = useState('');
     const [isSavingReview, setIsSavingReview] = useState(false);
     const [selectedLocation, setSelectedLocation] = useState<Location | null>(restaurant.locations?.[0] || null);
     const [copyStatus, setCopyStatus] = useState<'idle' | 'copying' | 'copied'>('idle');
+
+    // Google Rating State
+    const [isEditingGoogleRating, setIsEditingGoogleRating] = useState(false);
+    const [tempGoogleRating, setTempGoogleRating] = useState(restaurant.google_rating?.toString() || '');
+    const [tempGoogleRatingCount, setTempGoogleRatingCount] = useState(restaurant.google_rating_count?.toString() || '');
 
     // Date Planner State
     const [isDatePlannerOpen, setIsDatePlannerOpen] = useState(false);
@@ -111,6 +118,29 @@ export const RestaurantDetail: React.FC<RestaurantDetailProps> = ({ restaurant, 
             await onUpdateReview(restaurant.id, { user: currentUser.name as User, rating, comment });
             setIsSavingReview(false);
         }
+    };
+
+    const handleStartEditGoogleRating = () => {
+        setTempGoogleRating(restaurant.google_rating?.toString() || '');
+        setTempGoogleRatingCount(restaurant.google_rating_count?.toString() || '');
+        setIsEditingGoogleRating(true);
+    };
+
+    const handleCancelGoogleRating = () => {
+        setIsEditingGoogleRating(false);
+    };
+
+    const handleSaveGoogleRating = async () => {
+        const newRating = tempGoogleRating ? parseFloat(tempGoogleRating) : null;
+        const newCount = tempGoogleRatingCount ? parseInt(tempGoogleRatingCount, 10) : null;
+        
+        if (newRating !== null && (newRating < 0 || newRating > 5)) {
+            alert("A nota do Google deve ser entre 0 e 5.");
+            return;
+        }
+        
+        await onUpdateGoogleRating(restaurant.id, newRating, newCount);
+        setIsEditingGoogleRating(false);
     };
     
     const handleMemoryModalClose = () => {
@@ -418,7 +448,12 @@ Se nenhuma promoção ativa for encontrada, retorne APENAS a frase: "Nenhuma pro
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                          {restaurant.cuisine && <p className="text-md font-bold text-primary">{restaurant.cuisine}</p>}
                         <p className="text-sm text-slate-500 font-medium bg-secondary inline-block px-2 py-1 rounded-full">{restaurant.category}</p>
-                        <PriceRatingDisplay rating={restaurant.price_range || 0} className="text-lg" />
+                        <div className="flex items-center gap-2" title="Editar faixa de preço">
+                           <PriceRatingInput 
+                                rating={restaurant.price_range || 0} 
+                                setRating={(newRating) => onUpdatePriceRange(restaurant.id, newRating === restaurant.price_range ? 0 : newRating)} 
+                            />
+                        </div>
                         {restaurant.inTourOqfc && (
                             <span className="text-sm font-bold text-accent-focus bg-amber-100 px-2.5 py-1 rounded-full inline-flex items-center gap-1.5">
                                 <StarIcon className="w-4 h-4" />
@@ -438,6 +473,43 @@ Se nenhuma promoção ativa for encontrada, retorne APENAS a frase: "Nenhuma pro
                     </div>
                 </div>
                 
+                <div className="pt-4 border-t">
+                    <div className="flex items-center gap-3 group">
+                        <GoogleIcon className="w-5 h-5 text-slate-500" />
+                        {isEditingGoogleRating ? (
+                            <div className="flex items-center gap-2 animate-fade-in">
+                                <Input 
+                                    type="number" step="0.1" value={tempGoogleRating} 
+                                    onChange={e => setTempGoogleRating(e.target.value)}
+                                    placeholder="Nota (Ex: 4.5)" className="w-32" autoFocus
+                                />
+                                <Input 
+                                    type="number" value={tempGoogleRatingCount}
+                                    onChange={e => setTempGoogleRatingCount(e.target.value)}
+                                    placeholder="Qtd. (Ex: 350)" className="w-32"
+                                />
+                                <Button size="sm" variant="ghost" className="!p-2" onClick={handleSaveGoogleRating}><CheckIcon className="w-5 h-5 text-green-600"/></Button>
+                                <Button size="sm" variant="ghost" className="!p-2" onClick={handleCancelGoogleRating}><XMarkIcon className="w-5 h-5 text-red-600"/></Button>
+                            </div>
+                        ) : (
+                            <>
+                                {restaurant.google_rating != null ? (
+                                    <div className="flex items-center gap-1.5">
+                                        <StarIcon className="w-5 h-5 text-yellow-400" />
+                                        <span className="font-semibold text-lg text-slate-700">{restaurant.google_rating.toFixed(1)}</span>
+                                        <span className="text-sm text-slate-500">({restaurant.google_rating_count || 0} avaliações)</span>
+                                    </div>
+                                ) : (
+                                    <p className="text-slate-500">Nenhuma avaliação do Google cadastrada.</p>
+                                )}
+                                <Button variant="ghost" size="sm" className="!p-1.5 opacity-0 group-hover:opacity-100 transition-opacity" onClick={handleStartEditGoogleRating}>
+                                    <PencilIcon className="w-4 h-4"/>
+                                </Button>
+                            </>
+                        )}
+                    </div>
+                </div>
+
                 {/* Promotions Section */}
                 <div className="pt-4 border-t">
                     <div 

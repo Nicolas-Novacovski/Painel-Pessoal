@@ -150,6 +150,10 @@ const App: React.FC = () => {
             tokenClient.requestAccessToken();
         }
     };
+    
+    const updateCurrentUser = (updatedFields: Partial<UserProfile>) => {
+        setCurrentUser(prev => (prev ? { ...prev, ...updatedFields } : null));
+    };
 
     const renderView = () => {
         if (!currentUser) return null; // Should be handled by LoginScreen, but as a safeguard
@@ -175,7 +179,7 @@ const App: React.FC = () => {
             case 'dashboard':
                 return <Dashboard currentUser={currentUser.name as User} setView={setView} />;
             case 'restaurants':
-                return <RestaurantsApp currentUser={currentUser} />;
+                return <RestaurantsApp currentUser={currentUser} onProfileUpdate={updateCurrentUser} />;
             case 'ai-recommender':
                 return <AIRecommenderApp currentUser={currentUser} />;
             case 'expenses':

@@ -61,10 +61,11 @@ interface RestaurantDiscoveryProps {
     restaurants: Restaurant[];
     onClose: () => void;
     onInterest: (restaurantId: string) => Promise<void>;
+    onDislike: (restaurantId: string) => Promise<void>;
     currentUser: User;
 }
 
-export const RestaurantDiscovery: React.FC<RestaurantDiscoveryProps> = ({ restaurants, onClose, onInterest }) => {
+export const RestaurantDiscovery: React.FC<RestaurantDiscoveryProps> = ({ restaurants, onClose, onInterest, onDislike, currentUser }) => {
     const [currentIndex, setCurrentIndex] = useState(0);
     const cardRef = useRef<HTMLDivElement>(null);
     const isDragging = useRef(false);
@@ -90,6 +91,8 @@ export const RestaurantDiscovery: React.FC<RestaurantDiscoveryProps> = ({ restau
         
         if (direction === 'right') {
             onInterest(restaurant.id);
+        } else {
+            onDislike(restaurant.id);
         }
 
         const rotation = direction === 'right' ? 20 : -20;
@@ -180,7 +183,7 @@ export const RestaurantDiscovery: React.FC<RestaurantDiscoveryProps> = ({ restau
                 ) : (
                     <div className="w-full h-full flex flex-col items-center justify-center text-center p-8 bg-white rounded-2xl shadow-xl animate-fade-in">
                         <h2 className="text-2xl font-bold text-dark">Fim da Descoberta!</h2>
-                        <p className="text-slate-600 mt-2">Você viu todas as sugestões por enquanto. Dê uma olhada na sua lista de "Quero Ir" para decidir o próximo destino!</p>
+                        <p className="text-slate-600 mt-2">Você já viu todas as sugestões por enquanto. Dê uma olhada na sua lista de "Quero Ir" para decidir o próximo destino!</p>
                     </div>
                 )}
             </div>

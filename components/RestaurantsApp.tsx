@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Restaurant, Review, User, RestaurantCategory, Memory, DatePlan, UserProfile, CuratedList } from '../types';
-import { RESTAURANT_CATEGORIES, HOME_ADDRESSES, PROXIMITY_THRESHOLD_KM, ADMIN_COUPLE_EMAILS, USERS } from '../constants';
-import { PlusIcon, SparklesIcon, ChevronDownIcon, BookmarkIcon } from './Icons';
+import { RESTAURANT_CATEGORIES, ADMIN_COUPLE_EMAILS, USERS } from '../constants';
+import { PlusIcon, SparklesIcon, ChevronDownIcon, BookmarkIcon, InformationCircleIcon } from './Icons';
 import { Modal, Button, Input, SegmentedControl } from './UIComponents';
 import { RestaurantCard } from './RestaurantCard';
 import { RestaurantForm } from './RestaurantForm';
@@ -9,9 +9,11 @@ import { RestaurantDetail } from './RestaurantDetail';
 import { RestaurantDiscovery } from './RestaurantDiscovery';
 import { supabase } from '../utils/supabase';
 import { averageRating, extractNeighborhood, calculateDistance } from '../utils/helpers';
+import { GoogleGenAI, Type } from "@google/genai";
 
 interface RestaurantsAppProps {
     currentUser: UserProfile;
+    onProfileUpdate: (updatedFields: Partial<UserProfile>) => void;
 }
 
 interface CoupleRestaurant extends Restaurant {
@@ -36,6 +38,56 @@ CREATE TABLE public.couple_restaurants (
 -- Desabilita RLS para simplicidade.
 ALTER TABLE public.couple_restaurants DISABLE ROW LEVEL SECURITY;
 `;
+
+const AddressSetupModal: React.FC<{
+    onSave: (address: string) => Promise<void>;
+    onSkip: () => void;
+}> = ({ onSave, onSkip }) => {
+    const [address, setAddress] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const handleSave = async () => {
+        if (!address.trim()) {
+            setError('Por favor, insira um endereço.');
+            return;
+        }
+        setIsSaving(true);
+        setError(null);
+        try {
+            await onSave(address);
+        } catch (e: any) {
+            setError(e.message || 'Ocorreu um erro ao salvar.');
+            setIsSaving(false);
+        }
+    };
+
+    return (
+        <div className="space-y-4 text-center">
+            <h3 className="text-2xl font-bold text-dark">Bem-vindo(a)!</h3>
+            <p className="text-slate-600">
+                Para ajudar a encontrar restaurantes perto de você, por favor, insira seu endereço de casa.
+            </p>
+            <Input
+                type="text"
+                placeholder="Ex: Rua das Flores, 123, Curitiba, PR"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                autoFocus
+            />
+            {error && <p className="text-red-500 text-sm">{error}</p>}
+            <div className="flex justify-center gap-3 pt-4">
+                <Button variant="secondary" onClick={onSkip} disabled={isSaving}>
+                    Pular por agora
+                </Button>
+                <Button variant="primary" onClick={handleSave} disabled={isSaving}>
+                    {isSaving ? 'Salvando...' : 'Salvar Endereço'}
+                </Button>
+            </div>
+        </div>
+    );
+};
+
 
 const DatabaseErrorResolver: React.FC<{ title: string; instructions: string; sql: string }> = ({ title, instructions, sql }) => (
     <div className="p-4 mb-6 bg-red-50 border-2 border-dashed border-red-200 rounded-lg">
@@ -72,11 +124,12 @@ const EmptyState: React.FC<{ onImportClick: () => void; onAddClick: () => void; 
 );
 
 
-const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser }) => {
+const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser, onProfileUpdate }) => {
     const [allRestaurants, setAllRestaurants] = useState<Restaurant[]>([]);
     const [coupleRestaurants, setCoupleRestaurants] = useState<CoupleRestaurant[]>([]);
     const [curatedLists, setCuratedLists] = useState<CuratedList[]>([]);
-    
+    const [coupleProfiles, setCoupleProfiles] = useState<UserProfile[]>([]);
+
     const [searchTerm, setSearchTerm] = useState('');
     const [categoryFilter, setCategoryFilter] = useState<'all' | RestaurantCategory>('all');
     const [cuisineFilter, setCuisineFilter] = useState<'all' | string>('all');
@@ -87,7 +140,8 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser }) => {
     const [filtersOpen, setFiltersOpen] = useState(false);
     
     const [neighborhoodFilter, setNeighborhoodFilter] = useState<'all' | string>('all');
-    const [proximityFilter, setProximityFilter] = useState<'all' | 'nicolas_home' | 'ana_home'>('all');
+    const [proximityFilter, setProximityFilter] = useState<string>('all');
+    const [proximityRadius, setProximityRadius] = useState(5);
     
     const [modalContent, setModalContent] = useState<null | 'add' | 'import' | CoupleRestaurant>(null);
     const [editingRestaurant, setEditingRestaurant] = useState<Restaurant | null>(null);
@@ -96,6 +150,7 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser }) => {
     const [dbError, setDbError] = useState<string | null>(null);
     const [isImporting, setIsImporting] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
 
     const fetchData = useCallback(async () => {
         if (!currentUser.couple_id) {
@@ -115,15 +170,18 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser }) => {
                 return;
             }
 
-            const [allRestaurantsRes, coupleLinksRes, curatedListsRes] = await Promise.all([
+            const [allRestaurantsRes, coupleLinksRes, curatedListsRes, coupleProfilesRes] = await Promise.all([
                 supabase.from('restaurants').select('*'),
                 supabase.from('couple_restaurants').select('is_favorited, restaurants(*)').eq('couple_id', currentUser.couple_id),
-                supabase.from('curated_lists').select('*').order('name')
+                supabase.from('curated_lists').select('*').order('name'),
+                supabase.from('user_profiles').select('*').eq('couple_id', currentUser.couple_id),
             ]);
             
             if (allRestaurantsRes.error) throw allRestaurantsRes.error;
             if (coupleLinksRes.error) throw coupleLinksRes.error;
             if (curatedListsRes.error && curatedListsRes.error.code !== '42P01') throw curatedListsRes.error;
+            if (coupleProfilesRes.error) throw coupleProfilesRes.error;
+
 
             setAllRestaurants((allRestaurantsRes.data as any[]) || []);
             const coupleData = (coupleLinksRes.data || [])
@@ -131,6 +189,11 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser }) => {
                 .filter((r): r is CoupleRestaurant => r !== null);
             setCoupleRestaurants(coupleData);
             setCuratedLists((curatedListsRes.data as any[]) || []);
+            setCoupleProfiles((coupleProfilesRes.data as any[]) || []);
+
+             if (currentUser.address === null) {
+                setIsAddressModalOpen(true);
+            }
 
         } catch (error: any) {
             console.error('Error fetching data:', error);
@@ -138,10 +201,9 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser }) => {
         } finally {
             setIsLoading(false);
         }
-    }, [currentUser.couple_id]);
+    }, [currentUser.couple_id, currentUser.address]);
 
 
-    // This useEffect handles both initial data fetching and realtime updates.
     useEffect(() => {
         fetchData(); 
 
@@ -153,6 +215,8 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser }) => {
             'postgres_changes', { event: '*', schema: 'public', table: 'curated_lists' }, fetchData
         ).on(
             'postgres_changes', { event: '*', schema: 'public', table: 'couple_restaurants', filter: `couple_id=eq.${currentUser.couple_id}` }, fetchData
+        ).on(
+            'postgres_changes', { event: '*', schema: 'public', table: 'user_profiles', filter: `couple_id=eq.${currentUser.couple_id}` }, fetchData
         ).subscribe();
 
         return () => {
@@ -208,7 +272,7 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser }) => {
                 const { error: linkError } = await supabase.from('couple_restaurants').insert({
                     couple_id: currentUser.couple_id,
                     restaurant_id: newRestaurant.id,
-                    is_favorited: true, // New restaurants are favorited by default
+                    is_favorited: false,
                 });
                 if (linkError) {
                     console.error("Error linking new restaurant:", linkError);
@@ -270,6 +334,26 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser }) => {
         }
     }, [currentUser.couple_id, fetchData]);
 
+    const handleSetFavoriteState = useCallback(async (restaurantId: string, newFavoriteState: boolean) => {
+        if (!currentUser.couple_id) return;
+        
+        // Optimistic update
+        setCoupleRestaurants(prev => 
+            prev.map(r => r.id === restaurantId ? { ...r, is_favorited: newFavoriteState } : r)
+        );
+
+        const { error } = await supabase
+            .from('couple_restaurants')
+            .update({ is_favorited: newFavoriteState })
+            .match({ couple_id: currentUser.couple_id, restaurant_id: restaurantId });
+
+        if (error) {
+            console.error("Error setting favorite state:", error);
+            alert("Erro ao favoritar. A tela será atualizada.");
+            fetchData();
+        }
+    }, [currentUser.couple_id, fetchData]);
+
 
     const handleUpdateReview = useCallback(async (restaurantId: string, review: Review) => {
         const restaurant = allRestaurants.find(r => r.id === restaurantId);
@@ -282,6 +366,30 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser }) => {
 
         if (error) console.error('Error updating review:', error);
     }, [allRestaurants]);
+
+    const handleUpdatePriceRange = useCallback(async (restaurantId: string, price_range: number) => {
+        const { error } = await supabase
+            .from('restaurants')
+            .update({ price_range })
+            .eq('id', restaurantId);
+        
+        if (error) {
+            console.error('Error updating price range:', error);
+            alert("Erro ao atualizar a faixa de preço.");
+        }
+    }, []);
+
+    const handleUpdateGoogleRating = useCallback(async (restaurantId: string, rating: number | null, count: number | null) => {
+        const { error } = await supabase
+            .from('restaurants')
+            .update({ google_rating: rating, google_rating_count: count })
+            .eq('id', restaurantId);
+        
+        if (error) {
+            console.error('Error updating google rating:', error);
+            alert("Erro ao atualizar a avaliação do Google.");
+        }
+    }, []);
 
     const handleUpdateMemories = useCallback(async (restaurantId: string, newMemories: Memory[]) => {
         const { error } = await supabase.from('restaurants').update({ memories: newMemories } as any).eq('id', restaurantId);
@@ -317,16 +425,29 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser }) => {
         if (!currentUser.couple_id) return;
         setIsImporting(true);
         try {
-            const linksToInsert = list.restaurant_ids.map(id => ({
+            const validRestaurantIds = new Set(allRestaurants.map(r => r.id));
+            const existingRestaurantIds = list.restaurant_ids.filter(id => validRestaurantIds.has(id));
+
+            if (existingRestaurantIds.length === 0) {
+                alert(`Nenhum restaurante válido encontrado na lista "${list.name}". A importação foi cancelada.`);
+                setIsImporting(false);
+                return;
+            }
+            
+            if (existingRestaurantIds.length < list.restaurant_ids.length) {
+                const missingCount = list.restaurant_ids.length - existingRestaurantIds.length;
+                alert(`Aviso: ${missingCount} restaurante(s) da lista "${list.name}" não foram encontrados (provavelmente foram excluídos) e não serão importados.`);
+            }
+
+            const linksToInsert = existingRestaurantIds.map(id => ({
                 couple_id: currentUser.couple_id!,
                 restaurant_id: id,
-                is_favorited: false, // Items from lists are not favorited by default
+                is_favorited: false,
             }));
 
-            // Upsert will insert new rows, and ignore existing ones based on the primary key constraint
             const { error } = await supabase
                 .from('couple_restaurants')
-                .upsert(linksToInsert, { onConflict: 'couple_id, restaurant_id' }); 
+                .upsert(linksToInsert, { onConflict: 'couple_id, restaurant_id' });
             
             if (error) throw error;
 
@@ -342,24 +463,56 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser }) => {
         }
     };
     
-    const handleAddToList = useCallback(async (restaurantId: string) => {
-        if (!currentUser.couple_id) return;
-
-        const { error } = await supabase
-            .from('couple_restaurants')
-            .insert({ couple_id: currentUser.couple_id, restaurant_id: restaurantId, is_favorited: true });
-
-        if (error) {
-            console.error('Error adding to list from discovery:', error);
-        } else {
-            // No need to fetch, discovery mode will just move to the next card
-        }
-    }, [currentUser.couple_id]);
-
     const handleOpenDiscovery = () => {
-        setDiscoverySnapshot(restaurantsForDiscovery);
+        const shuffledList = [...coupleRestaurants].sort(() => Math.random() - 0.5);
+        setDiscoverySnapshot(shuffledList);
         setIsDiscoveryOpen(true);
     };
+
+    const handleSaveAddress = async (address: string) => {
+        try {
+            const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
+            const prompt = `Geocode the address "${address}" and return ONLY a valid JSON object with "latitude" and "longitude" keys. Example: {"latitude": -25.4284, "longitude": -49.2733}. If not found, return {"latitude": null, "longitude": null}.`;
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: prompt,
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: Type.OBJECT,
+                        properties: { latitude: { type: Type.NUMBER }, longitude: { type: Type.NUMBER } },
+                    },
+                },
+            });
+            const coords = JSON.parse(response.text.trim());
+            
+            if (!coords.latitude || !coords.longitude) {
+                throw new Error("Não foi possível encontrar as coordenadas para este endereço. Tente ser mais específico.");
+            }
+
+            const updatedFields = { address, latitude: coords.latitude, longitude: coords.longitude };
+            
+            const { error } = await supabase.from('user_profiles').update(updatedFields).eq('email', currentUser.email);
+            if (error) throw error;
+            
+            onProfileUpdate(updatedFields);
+            setIsAddressModalOpen(false);
+
+        } catch (error: any) {
+            console.error("Error saving address:", error);
+            throw error;
+        }
+    };
+    
+    const proximityOptions = useMemo(() => {
+        const options = [{ label: 'Qualquer', value: 'all' }];
+        coupleProfiles.forEach(profile => {
+            if (profile.address && profile.latitude && profile.longitude) {
+                options.push({ label: `Perto de ${profile.name}`, value: profile.email });
+            }
+        });
+        return options;
+    }, [coupleProfiles]);
 
     const uniqueCuisines = useMemo(() => {
         const cuisines = new Set<string>();
@@ -393,56 +546,52 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser }) => {
     const hasCuratedLists = curatedLists.length > 0;
 
     const filteredAndSortedRestaurants = useMemo(() => {
-         return coupleRestaurants
+        const selectedProfile = coupleProfiles.find(p => p.email === proximityFilter);
+
+        // 1. Pre-calculate distances for all restaurants if a proximity filter is active
+        const restaurantsWithDistance = coupleRestaurants.map(r => {
+            let distance = Infinity;
+            if (selectedProfile?.latitude && selectedProfile?.longitude) {
+                const distances = r.locations
+                    .map(l => l.latitude && l.longitude ? calculateDistance(selectedProfile.latitude, selectedProfile.longitude, l.latitude, l.longitude) : Infinity);
+                distance = Math.min(...distances);
+            }
+            return { ...r, distance };
+        });
+
+        // 2. Filter the restaurants based on all criteria
+        return restaurantsWithDistance
             .filter(r => {
-                if (visitedFilter === 'all') return true;
                 const hasVisited = r.reviews.some(review => review.user === (currentUser.name as User) && review.rating > 0);
-                return visitedFilter === 'visited' ? hasVisited : !hasVisited;
-            })
-            .filter(r => categoryFilter === 'all' || r.category === categoryFilter)
-            .filter(r => cuisineFilter === 'all' || (r.cuisine && r.cuisine.toLowerCase().includes(cuisineFilter.toLowerCase())))
-            .filter(r => tourFilter === 'all' || r.inTourOqfc === true)
-            .filter(r => {
+                if (visitedFilter !== 'all' && (visitedFilter === 'visited' ? !hasVisited : hasVisited)) {
+                    return false;
+                }
+                
+                if (categoryFilter !== 'all' && r.category !== categoryFilter) return false;
+                
+                if (cuisineFilter !== 'all' && !(r.cuisine && r.cuisine.toLowerCase().includes(cuisineFilter.toLowerCase()))) return false;
+                
+                if (tourFilter === 'all' ? false : !r.inTourOqfc) return false;
+                
                 const term = searchTerm.toLowerCase();
-                if (!term) return true;
-                return r.name.toLowerCase().includes(term) ||
-                       (r.cuisine && r.cuisine.toLowerCase().includes(term)) ||
-                       (r.locations && r.locations.some(l => l.address.toLowerCase().includes(term)));
-            })
-            .filter(r => priceFilters.length === 0 || (r.price_range !== null && priceFilters.includes(r.price_range)))
-             .filter(r => {
-                if (neighborhoodFilter === 'all') return true;
-                return r.locations.some(l => {
+                if (term && !(r.name.toLowerCase().includes(term) || (r.cuisine && r.cuisine.toLowerCase().includes(term)) || (r.locations && r.locations.some(l => l.address.toLowerCase().includes(term))))) {
+                    return false;
+                }
+                
+                if (priceFilters.length > 0 && (r.price_range === null || !priceFilters.includes(r.price_range))) return false;
+                
+                if (neighborhoodFilter !== 'all' && !r.locations.some(l => {
                     const neighborhood = extractNeighborhood(l.address);
                     return neighborhood?.toLowerCase() === neighborhoodFilter.toLowerCase();
-                });
-            })
-            .filter(r => {
-                if (proximityFilter === 'all') return true;
-                const targetCoords = proximityFilter === 'nicolas_home' 
-                    ? HOME_ADDRESSES.nicolas.coords 
-                    : HOME_ADDRESSES.ana.coords;
-                
-                return r.locations.some(l => {
-                    if (l.latitude && l.longitude) {
-                        const distance = calculateDistance(targetCoords.latitude, targetCoords.longitude, l.latitude, l.longitude);
-                        return distance <= PROXIMITY_THRESHOLD_KM;
-                    }
+                })) {
                     return false;
-                });
-            })
-            .map(r => {
-                let distance = Infinity;
-                if (proximityFilter !== 'all') {
-                    const targetCoords = proximityFilter === 'nicolas_home' 
-                        ? HOME_ADDRESSES.nicolas.coords 
-                        : HOME_ADDRESSES.ana.coords;
-                    
-                    const distances = r.locations
-                        .map(l => l.latitude && l.longitude ? calculateDistance(targetCoords.latitude, targetCoords.longitude, l.latitude, l.longitude) : Infinity);
-                    distance = Math.min(...distances);
                 }
-                return { ...r, distance };
+                
+                if (proximityFilter !== 'all' && r.distance > proximityRadius) {
+                    return false;
+                }
+
+                return true;
             })
             .sort((a, b) => {
                 switch (sortBy) {
@@ -463,13 +612,8 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser }) => {
                         return a.name.localeCompare(b.name);
                 }
             });
-    }, [coupleRestaurants, currentUser.name, categoryFilter, cuisineFilter, searchTerm, tourFilter, priceFilters, visitedFilter, sortBy, neighborhoodFilter, proximityFilter]);
+    }, [coupleRestaurants, currentUser.name, categoryFilter, cuisineFilter, searchTerm, tourFilter, priceFilters, visitedFilter, sortBy, neighborhoodFilter, proximityFilter, proximityRadius, coupleProfiles]);
 
-    const restaurantsForDiscovery = useMemo(() => {
-        const coupleRestaurantIds = new Set(coupleRestaurants.map(r => r.id));
-        return allRestaurants.filter(r => !coupleRestaurantIds.has(r.id));
-    }, [allRestaurants, coupleRestaurants]);
-    
     if (isLoading) {
         return <div className="p-6 text-center text-slate-500">Carregando restaurantes...</div>;
     }
@@ -535,19 +679,41 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser }) => {
                                                     {uniqueNeighborhoods.map(n => <option key={n} value={n}>{n}</option>)}
                                                 </select>
                                             </div>
+                                            {proximityOptions.length > 1 && (
+                                                <div>
+                                                    <label className="text-sm font-medium text-slate-600 block mb-1">Filtrar por Proximidade:</label>
+                                                    <SegmentedControl
+                                                        value={proximityFilter}
+                                                        onChange={(value) => setProximityFilter(value)}
+                                                        options={proximityOptions}
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
+                                        {proximityFilter !== 'all' && (
                                             <div>
-                                                <label className="text-sm font-medium text-slate-600 block mb-1">Filtrar por Proximidade:</label>
-                                                <SegmentedControl
-                                                    value={proximityFilter}
-                                                    onChange={(value) => setProximityFilter(value)}
-                                                    options={[
-                                                        { label: 'Qualquer', value: 'all' },
-                                                        { label: 'Casa (NV)', value: 'nicolas_home' },
-                                                        { label: 'Casa (AB)', value: 'ana_home' },
-                                                    ]}
+                                                <div className="flex items-center gap-1.5 mb-1">
+                                                    <label htmlFor="proximity-radius" className="text-sm font-medium text-slate-600">
+                                                        Raio de busca: <strong className="text-primary">{proximityRadius} km</strong>
+                                                    </label>
+                                                    <div className="relative group flex items-center">
+                                                        <InformationCircleIcon className="w-5 h-5 text-slate-400 cursor-help" />
+                                                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs bg-slate-700 text-white text-xs rounded-md py-1.5 px-3 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-lg">
+                                                            As distâncias são aproximadas e podem ter uma variação de quilometragem.
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <input
+                                                    id="proximity-radius"
+                                                    type="range"
+                                                    min="1"
+                                                    max="25"
+                                                    value={proximityRadius}
+                                                    onChange={(e) => setProximityRadius(Number(e.target.value))}
+                                                    className="w-full cursor-pointer custom-range-slider"
                                                 />
                                             </div>
-                                        </div>
+                                        )}
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                             <SegmentedControl value={visitedFilter} onChange={(value) => setVisitedFilter(value)} options={[{label: 'Todos', value: 'all'},{label: 'Já Fui', value: 'visited'},{label: 'Não Fui', value: 'not_visited'}]}/>
                                             <SegmentedControl value={tourFilter} onChange={(value) => setTourFilter(value)} options={[{ label: 'Todos', value: 'all' },{ label: 'Apenas Tour OQFC', value: 'tour_only' }]}/>
@@ -580,9 +746,23 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser }) => {
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                            {filteredAndSortedRestaurants.map(r => (
-                                <RestaurantCard key={r.id} restaurant={r} distance={r.distance} onSelect={setModalContent} onToggleFavorite={handleToggleFavorite} onRemoveFromList={handleRemoveFromList} currentUser={currentUser.name as User} />
-                            ))}
+                            {filteredAndSortedRestaurants.map(r => {
+                                const distanceToDisplay = (proximityFilter !== 'all' && r.distance !== Infinity)
+                                    ? Math.min(r.distance * 1.3, proximityRadius)
+                                    : r.distance;
+
+                                return (
+                                    <RestaurantCard 
+                                        key={r.id} 
+                                        restaurant={r} 
+                                        distance={distanceToDisplay} 
+                                        onSelect={setModalContent} 
+                                        onToggleFavorite={handleToggleFavorite} 
+                                        onRemoveFromList={handleRemoveFromList} 
+                                        currentUser={currentUser.name as User} 
+                                    />
+                                );
+                            })}
                         </div>
                     </>
                 ) : (
@@ -601,8 +781,12 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser }) => {
                 </div>
             </div>
             
+             <Modal isOpen={isAddressModalOpen} onClose={() => {}} title="Configurar Endereço">
+                <AddressSetupModal onSave={handleSaveAddress} onSkip={() => setIsAddressModalOpen(false)} />
+            </Modal>
+
             <Modal isOpen={modalContent !== null && typeof modalContent === 'object'} onClose={() => setModalContent(null)} title={modalContent && typeof modalContent === 'object' ? modalContent.name : ''}>
-                {modalContent && typeof modalContent === 'object' && <RestaurantDetail restaurant={modalContent} currentUser={currentUser} onUpdateReview={handleUpdateReview} onUpdateMemories={handleUpdateMemories} onUpdatePromotions={handleUpdatePromotions} onSaveDatePlan={handleSaveDatePlan} onEdit={handleOpenEditModal} onRemoveFromList={handleRemoveFromList} onToggleFavorite={handleToggleFavorite} />}
+                {modalContent && typeof modalContent === 'object' && <RestaurantDetail restaurant={modalContent} currentUser={currentUser} onUpdateReview={handleUpdateReview} onUpdatePriceRange={handleUpdatePriceRange} onUpdateGoogleRating={handleUpdateGoogleRating} onUpdateMemories={handleUpdateMemories} onUpdatePromotions={handleUpdatePromotions} onSaveDatePlan={handleSaveDatePlan} onEdit={handleOpenEditModal} onRemoveFromList={handleRemoveFromList} onToggleFavorite={handleToggleFavorite} />}
             </Modal>
             <Modal isOpen={modalContent === 'add'} onClose={() => setModalContent(null)} title="Adicionar Novo Restaurante">
                 <RestaurantForm onSave={(data) => handleSaveRestaurant(data)} onClose={() => setModalContent(null)} />
@@ -654,7 +838,8 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser }) => {
                     <RestaurantDiscovery 
                         restaurants={discoverySnapshot}
                         onClose={() => setIsDiscoveryOpen(false)}
-                        onInterest={handleAddToList}
+                        onInterest={(id) => handleSetFavoriteState(id, true)}
+                        onDislike={(id) => handleSetFavoriteState(id, false)}
                         currentUser={currentUser.name as User}
                     />
                 </div>

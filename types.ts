@@ -10,6 +10,9 @@ export interface UserProfile {
   role: Role;
   couple_id: string | null;
   allowed_views: View[] | null;
+  address: string | null;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 // This is a legacy type used in `created_by` fields in older tables.
@@ -282,6 +285,11 @@ export interface AIRecommendation {
     rating: number | null;
     image_url: string | null;
     maps_url: string | null;
+}
+
+export interface AIRecommenderHistoryItem {
+    cravings: string;
+    exclusions: string;
 }
 
 

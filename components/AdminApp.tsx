@@ -62,6 +62,14 @@ ALTER TABLE public.curated_lists DISABLE ROW LEVEL SECURITY;
 COMMIT;
 `;
 
+const USER_PROFILES_RLS_FIX_SQL = `-- SCRIPT PARA CORRIGIR A VISIBILIDADE DOS USUÁRIOS
+-- Este script desabilita a Política de Segurança de Nível de Linha (RLS) na tabela 'user_profiles'.
+-- A RLS pode impedir que administradores vejam a lista completa de usuários se não estiver configurada corretamente.
+-- Esta é a solução recomendada e segura para este aplicativo.
+
+ALTER TABLE public.user_profiles DISABLE ROW LEVEL SECURITY;
+`;
+
 const DatabaseErrorResolver: React.FC<{ sql: string, title: string, instructions: string }> = ({ sql, title, instructions }) => (
     <div className="p-4 mb-6 bg-red-50 border-2 border-dashed border-red-200 rounded-lg">
         <h4 className="font-semibold text-red-900">{title}</h4>
@@ -116,7 +124,17 @@ const UserProfileForm: React.FC<{
             return;
         }
         setIsSaving(true);
-        await onSave({ email, name, role, couple_id: coupleId || null, allowed_views: selectedViews }, isNewUser);
+        const profileToSave: Omit<UserProfile, 'picture'> = {
+            email,
+            name,
+            role,
+            couple_id: coupleId || null,
+            allowed_views: selectedViews,
+            address: initialData?.address || null,
+            latitude: initialData?.latitude || null,
+            longitude: initialData?.longitude || null,
+        };
+        await onSave(profileToSave, isNewUser);
         setIsSaving(false);
         onClose();
     };
@@ -173,7 +191,7 @@ const AdminApp: React.FC<{ currentUser: UserProfile }> = ({ currentUser }) => {
     const [profiles, setProfiles] = useState<UserProfile[]>([]);
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
     const [editingProfile, setEditingProfile] = useState<UserProfile | null>(null);
-    const [profileDbError, setProfileDbError] = useState(false);
+    const [profileDbError, setProfileDbError] = useState<null | 'migration_needed' | 'rls_issue'>(null);
     
     // Curated Lists state
     const [curatedLists, setCuratedLists] = useState<CuratedList[]>([]);
@@ -186,7 +204,7 @@ const AdminApp: React.FC<{ currentUser: UserProfile }> = ({ currentUser }) => {
 
     const checkAndFetchData = useCallback(async () => {
         setIsLoading(true);
-        setProfileDbError(false);
+        setProfileDbError(null);
 
         try {
             // --- CURATED LISTS SETUP CHECK ---
@@ -216,7 +234,13 @@ const AdminApp: React.FC<{ currentUser: UserProfile }> = ({ currentUser }) => {
             if (profilesRes.data && profilesRes.data.length > 0 && profilesRes.data[0].allowed_views === undefined) {
                  throw new Error("Missing 'allowed_views' column");
             }
-            setProfiles((profilesRes.data as any[]) || []);
+
+            if (profilesRes.data && profilesRes.data.length === 0 && currentUser.role === 'admin') {
+                setProfileDbError('rls_issue');
+                setProfiles([]);
+            } else {
+                setProfiles((profilesRes.data as any[]) || []);
+            }
 
             if (restaurantsRes.error) throw restaurantsRes.error;
             setRestaurants(restaurantsRes.data || []);
@@ -230,14 +254,14 @@ const AdminApp: React.FC<{ currentUser: UserProfile }> = ({ currentUser }) => {
             console.error('Error fetching admin data:', error.message);
             const msg = (error.message || '').toLowerCase();
              if (error?.code === '42P01' || msg.includes('allowed_views')) {
-                setProfileDbError(true);
+                setProfileDbError('migration_needed');
             } else {
                  alert("Erro ao buscar dados. Verifique o console.");
             }
         } finally {
             setIsLoading(false);
         }
-    }, [isListsConfigured]);
+    }, [isListsConfigured, currentUser.role]);
 
     useEffect(() => {
         if (currentUser.role !== 'admin') return;
@@ -340,7 +364,9 @@ const AdminApp: React.FC<{ currentUser: UserProfile }> = ({ currentUser }) => {
                     <Button onClick={() => { setEditingProfile(null); setIsProfileModalOpen(true); }}><PlusIcon className="w-5 h-5"/> Novo Usuário</Button>
                 </div>
                 
-                {profileDbError && <DatabaseErrorResolver sql={PERMISSIONS_MIGRATION_SQL} title="Atualizar Permissões de Usuário" instructions="Para usar o novo sistema de permissões por página, a tabela de usuários precisa ser atualizada."/>}
+                {profileDbError === 'migration_needed' && <DatabaseErrorResolver sql={PERMISSIONS_MIGRATION_SQL} title="Atualizar Permissões de Usuário" instructions="Para usar o novo sistema de permissões por página, a tabela de usuários precisa ser atualizada."/>}
+                {profileDbError === 'rls_issue' && <DatabaseErrorResolver sql={USER_PROFILES_RLS_FIX_SQL} title="Corrigir Visibilidade de Usuários" instructions="A lista de usuários está vazia. Isso geralmente é causado por uma Política de Segurança (RLS) que impede o acesso. O script abaixo desabilita a RLS na tabela de usuários, permitindo que administradores vejam todos os perfis."/>}
+
                 {isLoading && !profileDbError && <p>Carregando perfis...</p>}
                 
                 {!isLoading && !profileDbError && (

@@ -62,6 +62,9 @@ export interface Database {
           role: string;
           couple_id: string | null;
           allowed_views: Json | null;
+          address: string | null;
+          latitude: number | null;
+          longitude: number | null;
         };
         Insert: {
           email: string;
@@ -69,6 +72,9 @@ export interface Database {
           role: string;
           couple_id?: string | null;
           allowed_views?: Json | null;
+          address?: string | null;
+          latitude?: number | null;
+          longitude?: number | null;
         };
         Update: Partial<{
           email?: string;
@@ -76,6 +82,9 @@ export interface Database {
           role?: string;
           couple_id?: string | null;
           allowed_views?: Json | null;
+          address?: string | null;
+          latitude?: number | null;
+          longitude?: number | null;
         }>;
       };
       lists: {
