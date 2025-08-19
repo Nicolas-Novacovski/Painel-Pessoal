@@ -17,6 +17,7 @@ export const ALL_VIEWS: { id: View; name: string; description: string }[] = [
     { id: 'dashboard', name: 'Painel', description: 'Visão geral com widgets.' },
     { id: 'restaurants', name: 'Restaurantes', description: 'Gerenciar e explorar restaurantes.' },
     { id: 'ai-recommender', name: 'Recomendador IA', description: 'Receber recomendações de restaurantes com IA.' },
+    { id: 'travel', name: 'Viagens', description: 'Planeje suas próximas aventuras.' },
     { id: 'lists', name: 'Listas', description: 'Listas de desejos, links e tarefas.' },
     { id: 'expenses', name: 'Planejamento', description: 'Controle financeiro mensal.' },
     { id: 'recipes', name: 'Receitas', description: 'Livro de receitas do casal.' },

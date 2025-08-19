@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { UserProfile, View } from '../types';
 import { USERS } from '../constants';
-import { HomeIcon, RestaurantIcon, CreditCardIcon, BookOpenIcon, BellIcon, HeartPulseIcon, ArrowLeftOnRectangleIcon, BookmarkIcon, BriefcaseIcon, ShieldCheckIcon, SparklesIcon } from './Icons';
+import { HomeIcon, RestaurantIcon, CreditCardIcon, BookOpenIcon, BellIcon, HeartPulseIcon, ArrowLeftOnRectangleIcon, BookmarkIcon, BriefcaseIcon, ShieldCheckIcon, SparklesIcon, PaperAirplaneIcon } from './Icons';
 import { Button } from './UIComponents';
 
 interface NavigationProps {
@@ -15,6 +15,7 @@ const navItems: { label: string; view: View; icon: React.FC<any> }[] = [
     { label: 'Painel', view: 'dashboard', icon: HomeIcon },
     { label: 'Restaurantes', view: 'restaurants', icon: RestaurantIcon },
     { label: 'Recomendador IA', view: 'ai-recommender', icon: SparklesIcon },
+    { label: 'Viagens', view: 'travel', icon: PaperAirplaneIcon },
     { label: 'Listas', view: 'lists', icon: BookmarkIcon },
     { label: 'Planejamento', view: 'expenses', icon: CreditCardIcon },
     { label: 'Receitas', view: 'recipes', icon: BookOpenIcon },
@@ -33,8 +34,8 @@ const DesktopSidebar: React.FC<NavigationProps> = ({ activeView, setActiveView, 
         }
         // Fallback for non-migrated users
         const legacyAllowed: Record<UserProfile['role'], View[]> = {
-           admin: ['dashboard', 'restaurants', 'ai-recommender', 'expenses', 'recipes', 'reminders', 'wellness', 'lists', 'applications', 'admin'],
-           partner: ['dashboard', 'restaurants', 'ai-recommender', 'expenses', 'recipes', 'reminders', 'wellness', 'lists'],
+           admin: ['dashboard', 'restaurants', 'ai-recommender', 'travel', 'expenses', 'recipes', 'reminders', 'wellness', 'lists', 'applications', 'admin'],
+           partner: ['dashboard', 'restaurants', 'ai-recommender', 'travel', 'expenses', 'recipes', 'reminders', 'wellness', 'lists'],
            parent: ['applications'],
            visitor: ['restaurants'],
         };
@@ -103,8 +104,8 @@ const MobileBottomNav: React.FC<Pick<NavigationProps, 'activeView' | 'setActiveV
         }
         // Fallback for non-migrated users
         const legacyAllowed: Record<UserProfile['role'], View[]> = {
-           admin: ['dashboard', 'restaurants', 'ai-recommender', 'expenses', 'recipes', 'reminders', 'wellness', 'lists', 'applications', 'admin'],
-           partner: ['dashboard', 'restaurants', 'ai-recommender', 'expenses', 'recipes', 'reminders', 'wellness', 'lists'],
+           admin: ['dashboard', 'restaurants', 'ai-recommender', 'travel', 'expenses', 'recipes', 'reminders', 'wellness', 'lists', 'applications', 'admin'],
+           partner: ['dashboard', 'restaurants', 'ai-recommender', 'travel', 'expenses', 'recipes', 'reminders', 'wellness', 'lists'],
            parent: ['applications'],
            visitor: ['restaurants'],
         };

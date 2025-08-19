@@ -1,6 +1,6 @@
 // --- Core Types ---
 export type Role = 'admin' | 'partner' | 'parent' | 'visitor';
-export type View = 'dashboard' | 'restaurants' | 'expenses' | 'recipes' | 'reminders' | 'wellness' | 'lists' | 'applications' | 'admin' | 'ai-recommender';
+export type View = 'dashboard' | 'restaurants' | 'expenses' | 'recipes' | 'reminders' | 'wellness' | 'lists' | 'applications' | 'admin' | 'ai-recommender' | 'travel';
 
 // This is the primary user object for the currently logged-in user.
 export interface UserProfile {
@@ -290,6 +290,70 @@ export interface AIRecommendation {
 export interface AIRecommenderHistoryItem {
     cravings: string;
     exclusions: string;
+}
+
+// --- New: Travel ---
+export type TripStatus = 'planning' | 'upcoming' | 'completed' | 'cancelled';
+export type ItineraryCategory = 'activity' | 'flight' | 'accommodation' | 'food' | 'transport';
+export type TripExpenseCategory = 'transport' | 'accommodation' | 'food' | 'activities' | 'shopping' | 'other';
+
+export interface ChecklistItem {
+    id: string;
+    text: string;
+    is_done: boolean;
+    is_heading?: boolean;
+}
+
+export interface Trip {
+    id: string;
+    created_at: string;
+    name: string;
+    destination: string | null;
+    start_date: string | null; // YYYY-MM-DD
+    end_date: string | null; // YYYY-MM-DD
+    cover_image_url: string | null;
+    status: TripStatus;
+    budget: number | null;
+    couple_id: string;
+    checklist: ChecklistItem[] | null;
+    travelers: number;
+}
+
+export interface ItineraryItem {
+    id: string;
+    trip_id: string;
+    item_date: string; // YYYY-MM-DD
+    start_time: string | null; // HH:mm
+    end_time: string | null; // HH:mm
+    category: ItineraryCategory;
+    description: string;
+    details: {
+        address?: string;
+        reservation_number?: string;
+        url?: string;
+        notes?: string;
+    } | null;
+    is_completed: boolean;
+    cost: number | null;
+}
+
+export interface TripExpense {
+    id: string;
+    trip_id: string;
+    description: string;
+    amount: number;
+    category: TripExpenseCategory;
+    payment_date: string; // YYYY-MM-DD
+    user_email: string | null;
+    itinerary_item_id: string | null;
+}
+
+export interface GalleryItem {
+    id: string;
+    trip_id: string;
+    image_url: string;
+    caption: string | null;
+    is_inspiration: boolean;
 }
 
 

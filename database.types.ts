@@ -548,6 +548,152 @@ export interface Database {
           participants_status?: Json;
         }>;
       };
+      trips: {
+        Row: {
+          id: string;
+          created_at: string;
+          name: string;
+          destination: string | null;
+          start_date: string | null;
+          end_date: string | null;
+          cover_image_url: string | null;
+          status: string;
+          budget: number | null;
+          couple_id: string;
+          checklist: Json | null;
+          travelers: number;
+        };
+        Insert: {
+          id?: string;
+          created_at?: string;
+          name: string;
+          destination?: string | null;
+          start_date?: string | null;
+          end_date?: string | null;
+          cover_image_url?: string | null;
+          status?: string;
+          budget?: number | null;
+          couple_id: string;
+          checklist?: Json | null;
+          travelers?: number;
+        };
+        Update: Partial<{
+          id?: string;
+          created_at?: string;
+          name?: string;
+          destination?: string | null;
+          start_date?: string | null;
+          end_date?: string | null;
+          cover_image_url?: string | null;
+          status?: string;
+          budget?: number | null;
+          couple_id?: string;
+          checklist?: Json | null;
+          travelers?: number;
+        }>;
+      };
+      trip_itinerary_items: {
+        Row: {
+          id: string;
+          created_at: string;
+          trip_id: string;
+          item_date: string;
+          start_time: string | null;
+          end_time: string | null;
+          category: string;
+          description: string;
+          details: Json | null;
+          is_completed: boolean;
+          cost: number | null;
+        };
+        Insert: {
+          id?: string;
+          created_at?: string;
+          trip_id: string;
+          item_date: string;
+          start_time?: string | null;
+          end_time?: string | null;
+          category: string;
+          description: string;
+          details?: Json | null;
+          is_completed?: boolean;
+          cost?: number | null;
+        };
+        Update: Partial<{
+          id?: string;
+          created_at?: string;
+          trip_id?: string;
+          item_date?: string;
+          start_time?: string | null;
+          end_time?: string | null;
+          category?: string;
+          description?: string;
+          details?: Json | null;
+          is_completed?: boolean;
+          cost?: number | null;
+        }>;
+      };
+      trip_expenses: {
+        Row: {
+          id: string;
+          created_at: string;
+          trip_id: string;
+          description: string;
+          amount: number;
+          category: string;
+          payment_date: string;
+          user_email: string | null;
+          itinerary_item_id: string | null;
+        };
+        Insert: {
+          id?: string;
+          created_at?: string;
+          trip_id: string;
+          description: string;
+          amount: number;
+          category: string;
+          payment_date: string;
+          user_email?: string | null;
+          itinerary_item_id?: string | null;
+        };
+        Update: Partial<{
+          id?: string;
+          created_at?: string;
+          trip_id?: string;
+          description?: string;
+          amount?: number;
+          category?: string;
+          payment_date?: string;
+          user_email?: string | null;
+          itinerary_item_id?: string | null;
+        }>;
+      };
+      trip_gallery_items: {
+        Row: {
+          id: string;
+          created_at: string;
+          trip_id: string;
+          image_url: string;
+          caption: string | null;
+          is_inspiration: boolean;
+        };
+        Insert: {
+          id?: string;
+          created_at?: string;
+          trip_id: string;
+          image_url: string;
+          caption?: string | null;
+          is_inspiration?: boolean;
+        };
+        Update: Partial<{
+          id?: string;
+          created_at?: string;
+          trip_id?: string;
+          image_url?: string;
+          caption?: string | null;
+          is_inspiration?: boolean;
+        }>;
+      };
     };
     Views: {
       [_ in never]: never;

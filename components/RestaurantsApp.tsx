@@ -183,12 +183,28 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser, onProfileU
             if (coupleProfilesRes.error) throw coupleProfilesRes.error;
 
 
-            setAllRestaurants((allRestaurantsRes.data as any[]) || []);
+            const fetchedRestaurants = (allRestaurantsRes.data as Restaurant[]) || [];
+            setAllRestaurants(fetchedRestaurants);
+
+            const dbCuratedLists = (curatedListsRes.data as CuratedList[]) || [];
+            
+            // Dynamically create and inject the "All Restaurants" curated list
+            const allRestaurantsList: CuratedList = {
+                id: 'all-restaurants-virtual', // A unique, non-db ID
+                name: 'Todos os Restaurantes',
+                description: 'Uma lista dinâmica com todos os restaurantes cadastrados no sistema.',
+                restaurant_ids: fetchedRestaurants.map(r => r.id),
+                icon: '🍽️',
+                created_at: new Date().toISOString(),
+            };
+            // Prepend it to the lists from DB
+            setCuratedLists([allRestaurantsList, ...dbCuratedLists]);
+
             const coupleData = (coupleLinksRes.data || [])
                 .map(link => (link.restaurants ? { ...(link.restaurants as Restaurant), is_favorited: link.is_favorited } : null))
                 .filter((r): r is CoupleRestaurant => r !== null);
             setCoupleRestaurants(coupleData);
-            setCuratedLists((curatedListsRes.data as any[]) || []);
+
             setCoupleProfiles((coupleProfilesRes.data as any[]) || []);
 
              if (currentUser.address === null) {

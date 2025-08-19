@@ -15,6 +15,7 @@ import ListsApp from './components/ListsApp';
 import ApplicationsApp from './components/ApplicationsApp';
 import AdminApp from './components/AdminApp';
 import AIRecommenderApp from './components/AIRecommenderApp';
+import TravelApp from './components/TravelApp';
 
 const GOOGLE_CLIENT_ID = '541449375636-vth3bki95hgg0n3mnt950loi6tu17gh2.apps.googleusercontent.com';
 
@@ -127,8 +128,8 @@ const App: React.FC = () => {
             // Fallback for users migrated from role-based system without allowed_views yet
             if (allowedViews.length === 0) {
                  const legacyAllowed: Record<UserProfile['role'], View[]> = {
-                    admin: ['dashboard', 'restaurants', 'ai-recommender', 'expenses', 'recipes', 'reminders', 'wellness', 'lists', 'applications', 'admin'],
-                    partner: ['dashboard', 'restaurants', 'ai-recommender', 'expenses', 'recipes', 'reminders', 'wellness', 'lists'],
+                    admin: ['dashboard', 'restaurants', 'ai-recommender', 'travel', 'expenses', 'recipes', 'reminders', 'wellness', 'lists', 'applications', 'admin'],
+                    partner: ['dashboard', 'restaurants', 'ai-recommender', 'travel', 'expenses', 'recipes', 'reminders', 'wellness', 'lists'],
                     parent: ['applications'],
                     visitor: ['restaurants'],
                 };
@@ -163,8 +164,8 @@ const App: React.FC = () => {
         // Re-check access before rendering
         if (allowedViews.length === 0) {
              const legacyAllowed: Record<UserProfile['role'], View[]> = {
-                admin: ['dashboard', 'restaurants', 'ai-recommender', 'expenses', 'recipes', 'reminders', 'wellness', 'lists', 'applications', 'admin'],
-                partner: ['dashboard', 'restaurants', 'ai-recommender', 'expenses', 'recipes', 'reminders', 'wellness', 'lists'],
+                admin: ['dashboard', 'restaurants', 'ai-recommender', 'travel', 'expenses', 'recipes', 'reminders', 'wellness', 'lists', 'applications', 'admin'],
+                partner: ['dashboard', 'restaurants', 'ai-recommender', 'travel', 'expenses', 'recipes', 'reminders', 'wellness', 'lists'],
                 parent: ['applications'],
                 visitor: ['restaurants'],
             };
@@ -182,6 +183,8 @@ const App: React.FC = () => {
                 return <RestaurantsApp currentUser={currentUser} onProfileUpdate={updateCurrentUser} />;
             case 'ai-recommender':
                 return <AIRecommenderApp currentUser={currentUser} />;
+            case 'travel':
+                return <TravelApp currentUser={currentUser} />;
             case 'expenses':
                 return <ExpensesApp currentUser={currentUser} googleAuthToken={googleAuthToken} onAuthError={handleLogout} />;
             case 'recipes':
@@ -214,7 +217,7 @@ const App: React.FC = () => {
                 onLogout={handleLogout}
             />
             
-            <div className="flex-1 flex flex-col overflow-y-auto bg-slate-100">
+            <div className="flex-1 flex flex-col overflow-y-auto bg-slate-50">
                  <main className="flex-1 pb-20 sm:pb-0">
                     <div key={view} className="animate-fade-in">
                         {renderView()}

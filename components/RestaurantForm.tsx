@@ -158,39 +158,66 @@ export const RestaurantForm: React.FC<RestaurantFormProps> = ({ onSave, onClose,
         setIsAiFilling(true);
         try {
             const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
+            const prompt = `Sua tarefa é atuar como um assistente de pesquisa para preencher dados de um restaurante.
+Realize uma busca detalhada no Google pelo restaurante "${name}" em Curitiba, PR.
+Analise os resultados da busca, principalmente o painel de informações do Google (Google Knowledge Panel), para extrair os seguintes dados.
+
+Responda APENAS com o texto no formato CHAVE: VALOR, com cada par em uma nova linha. Não inclua texto explicativo antes ou depois. Se não encontrar uma informação, retorne "N/A" para texto ou "0" para números.
+
+CHAVES ESPERADAS:
+- CATEGORIA
+- COZINHA
+- VIBE
+- PRECO (um número de 1 a 4)
+- ENDERECO
+- NOTA_GOOGLE (apenas o número, ex: 4.7)
+- AVALIACOES_GOOGLE (apenas o número, ex: 350)
+- MENU_URL
+
+EXEMPLO DE RESPOSTA:
+CATEGORIA: Jantar
+COZINHA: Italiana
+VIBE: Familiar, Tradicional
+PRECO: 3
+ENDERECO: Av. Sete de Setembro, 2775 - Rebouças, Curitiba - PR
+NOTA_GOOGLE: 4.7
+AVALIACOES_GOOGLE: 3250
+MENU_URL: https://www.exemplorestaurante.com.br/cardapio
+`;
             const response = await ai.models.generateContent({
                 model: 'gemini-2.5-flash',
-                contents: `Busque no Google pelo restaurante "${name}" em Curitiba e extraia: category (uma de: ${RESTAURANT_CATEGORIES.join(', ')}), cuisine, vibe (1 a 3 palavras), price_range (um número inteiro de 1 a 4), address, google_rating (número), google_rating_count (número). Retorne APENAS um objeto JSON.`,
+                contents: prompt,
                 config: { tools: [{googleSearch: {}}] }
             });
             
-            let jsonString = response.text.trim();
-            const jsonMatch = jsonString.match(/```json\s*([\s\S]*?)\s*```|({[\s\S]*})/);
-            if (!jsonMatch) {
-                throw new Error("A IA não retornou um JSON válido para preenchimento. Resposta: " + jsonString);
-            }
-            jsonString = jsonMatch[1] || jsonMatch[2];
-            const result = JSON.parse(jsonString);
+            const resultText = response.text.trim();
+            const lines = resultText.split('\n');
+            const parsedData: Record<string, string> = {};
 
-            if(result.category && RESTAURANT_CATEGORIES.includes(result.category)) setCategory(result.category);
-            if(result.cuisine) setCuisine(result.cuisine);
-            if(result.vibe) setVibe(result.vibe);
-            if(result.address) setLocations([{ address: result.address, latitude: null, longitude: null }]);
-            if (result.google_rating) setGoogleRating(parseFloat(result.google_rating));
-            if (result.google_rating_count) setGoogleRatingCount(parseInt(result.google_rating_count, 10));
+            lines.forEach(line => {
+                const separatorIndex = line.indexOf(':');
+                if (separatorIndex > 0) {
+                    const key = line.substring(0, separatorIndex).trim().toUpperCase().replace(/ /g, '_');
+                    const value = line.substring(separatorIndex + 1).trim();
+                    parsedData[key] = value;
+                }
+            });
 
-            if (result.price_range) {
-                let price = 0;
-                if (typeof result.price_range === 'number' && result.price_range >= 1 && result.price_range <= 4) {
-                    price = result.price_range;
-                } else if (typeof result.price_range === 'string') {
-                    price = (result.price_range.match(/\$/g) || []).length;
-                }
-                
-                if (price >= 1 && price <= 4) {
-                    setPriceRange(price);
-                }
-            }
+            if(parsedData.CATEGORIA && RESTAURANT_CATEGORIES.includes(parsedData.CATEGORIA as RestaurantCategory)) setCategory(parsedData.CATEGORIA as RestaurantCategory);
+            if(parsedData.COZINHA && parsedData.COZINHA !== 'N/A') setCuisine(parsedData.COZINHA);
+            if(parsedData.VIBE && parsedData.VIBE !== 'N/A') setVibe(parsedData.VIBE);
+            if(parsedData.ENDERECO && parsedData.ENDERECO !== 'N/A') setLocations([{ address: parsedData.ENDERECO, latitude: null, longitude: null }]);
+            if(parsedData.MENU_URL && parsedData.MENU_URL !== 'N/A') setMenuUrl(parsedData.MENU_URL);
+
+            const googleRatingNum = parseFloat(parsedData.NOTA_GOOGLE);
+            if (!isNaN(googleRatingNum) && googleRatingNum > 0) setGoogleRating(googleRatingNum);
+            
+            const googleRatingCountNum = parseInt(parsedData.AVALIACOES_GOOGLE, 10);
+            if (!isNaN(googleRatingCountNum) && googleRatingCountNum > 0) setGoogleRatingCount(googleRatingCountNum);
+
+            const priceRangeNum = parseInt(parsedData.PRECO, 10);
+            if (!isNaN(priceRangeNum) && priceRangeNum >= 1 && priceRangeNum <= 4) setPriceRange(priceRangeNum);
+
 
         } catch (error) {
             console.error("AI Fill Error:", error); alert(`Erro ao buscar informações com a IA: ${(error as Error).message}`);
