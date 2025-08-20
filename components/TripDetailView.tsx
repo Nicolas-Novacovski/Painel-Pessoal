@@ -780,7 +780,7 @@ const ChecklistTab: React.FC<{ trip: Trip; onTripUpdate: (updatedTrip: Trip) => 
             ))}
             <form onSubmit={handleAddItem} className="flex gap-2 mt-4 pt-4 border-t">
                 <Input value={newItemText} onChange={e => setNewItemText(e.target.value)} placeholder="Novo item..." className="flex-grow" />
-                <select value={newItemType} onChange={e => setNewItemType(e.target.value as any)} className="p-2 bg-white border border-slate-300 rounded-lg">
+                <select value={newItemType} onChange={e => setNewItemType(e.target.value as any)} className="p-2 bg-white border border-slate-300 rounded-lg text-slate-900">
                     <option value="item">Item</option>
                     <option value="heading">Título</option>
                 </select>

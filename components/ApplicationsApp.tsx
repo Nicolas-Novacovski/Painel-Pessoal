@@ -155,7 +155,7 @@ const ApplicationForm: React.FC<{
         <form onSubmit={handleSubmit} className="space-y-4">
             <Input value={companyName} onChange={e => setCompanyName(e.target.value)} placeholder="Nome da Empresa" required />
             <Input value={roleName} onChange={e => setRoleName(e.target.value)} placeholder="Nome da Vaga" required />
-            <select value={status} onChange={e => setStatus(e.target.value as ApplicationStatus)} className="w-full p-2 bg-white border border-slate-300 rounded-lg">
+            <select value={status} onChange={e => setStatus(e.target.value as ApplicationStatus)} className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-900">
                 {STATUS_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
             </select>
             <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Anotações (opcional)" rows={3} className="w-full p-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary" />

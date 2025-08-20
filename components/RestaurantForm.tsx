@@ -90,6 +90,9 @@ export const RestaurantForm: React.FC<RestaurantFormProps> = ({ onSave, onClose,
     const handleLocationChange = (index: number, value: string) => {
         const newLocations = [...locations];
         newLocations[index].address = value;
+        // Reset lat/lng when address changes to force re-geocoding
+        newLocations[index].latitude = null;
+        newLocations[index].longitude = null;
         setLocations(newLocations);
     };
 
@@ -123,11 +126,24 @@ export const RestaurantForm: React.FC<RestaurantFormProps> = ({ onSave, onClose,
                  if (loc.address && (loc.latitude === null || loc.longitude === null)) {
                     try {
                         const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
+                        const prompt = `Use Google Search to find the precise latitude and longitude for the address "${loc.address}, Curitiba, PR, Brazil". Return ONLY a valid JSON object with "latitude" and "longitude". Example: {"latitude": -25.4284, "longitude": -49.2733}. If you cannot find the address, return {"latitude": null, "longitude": null}.`;
+                        
                         const response = await ai.models.generateContent({
-                            model: 'gemini-2.5-flash', contents: `Geocode the address "${loc.address}, Curitiba, PR, Brazil". Return ONLY a valid JSON object with "latitude" and "longitude".`,
-                            config: { responseMimeType: "application/json", responseSchema: { type: Type.OBJECT, properties: { latitude: { type: Type.NUMBER }, longitude: { type: Type.NUMBER }}}}
+                            model: 'gemini-2.5-flash',
+                            contents: prompt,
+                            config: {
+                                tools: [{ googleSearch: {} }]
+                            }
                         });
-                        const result = JSON.parse(response.text.trim());
+
+                        // Extract JSON from the response text, as it may contain markdown or other text
+                        const responseText = response.text.trim();
+                        const jsonMatch = responseText.match(/{[\s\S]*}/);
+                        if (!jsonMatch) {
+                             throw new Error("Geocoding failed: No valid JSON object found in the AI response.");
+                        }
+                        
+                        const result = JSON.parse(jsonMatch[0]);
                         return { ...loc, latitude: result.latitude || null, longitude: result.longitude || null };
                     } catch (geoError) {
                         console.error(`Falha ao geocodificar "${loc.address}".`, geoError); return loc;
@@ -271,7 +287,7 @@ MENU_URL: https://www.exemplorestaurante.com.br/cardapio
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                      <div>
                         <label htmlFor="category" className="block text-sm font-medium text-slate-700 mb-1">Categoria</label>
-                        <select id="category" value={category} onChange={e => setCategory(e.target.value as RestaurantCategory)} className="w-full p-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition" disabled={isBusy}>
+                        <select id="category" value={category} onChange={e => setCategory(e.target.value as RestaurantCategory)} className="w-full p-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition text-slate-900" disabled={isBusy}>
                             {RESTAURANT_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                     </div>

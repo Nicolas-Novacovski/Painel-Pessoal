@@ -1108,7 +1108,7 @@ const RecipeForm: React.FC<{
             )}
             <Input type="text" placeholder="Nome da Receita" value={name} onChange={e => setName(e.target.value)} required disabled={isBusy}/>
             <div className="grid grid-cols-2 gap-4">
-                <select value={category} onChange={e => setCategory(e.target.value as RecipeCategory)} className="w-full p-2 bg-white border border-slate-300 rounded-lg" disabled={isBusy}>
+                <select value={category} onChange={e => setCategory(e.target.value as RecipeCategory)} className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-900" disabled={isBusy}>
                     {RECIPE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
                 <Input type="number" placeholder="Tempo de preparo (min)" value={prepTime} onChange={e => setPrepTime(Number(e.target.value))} disabled={isBusy}/>

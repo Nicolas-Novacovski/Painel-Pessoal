@@ -146,7 +146,7 @@ const UserProfileForm: React.FC<{
             <div className="grid grid-cols-2 gap-4">
                 <div>
                     <label htmlFor="role-select" className="font-medium text-sm text-slate-600 block mb-1">Papel (Role)</label>
-                    <select id="role-select" value={role} onChange={e => setRole(e.target.value as Role)} className="w-full p-2 bg-white border border-slate-300 rounded-lg">
+                    <select id="role-select" value={role} onChange={e => setRole(e.target.value as Role)} className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-900">
                         <option value="partner">Partner</option>
                         <option value="parent">Parent</option>
                         <option value="admin">Admin</option>

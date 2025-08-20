@@ -1,3 +1,17 @@
+<script type="importmap">
+{
+  "imports": {
+    "react/": "https://esm.sh/react@^19.1.1/",
+    "react": "https://esm.sh/react@^19.1.1",
+    "react-dom/": "https://esm.sh/react-dom@^19.1.1/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.15.0",
+    "chart.js": "https://esm.sh/chart.js@^4.5.0",
+    "leaflet": "https://esm.sh/leaflet@^1.9.4",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.55.0",
+    "react-chartjs-2": "https://esm.sh/react-chartjs-2@^5.3.0"
+  }
+}
+</script>
 <!DOCTYPE html>
 <html lang="pt-BR">
   <head>
@@ -7,6 +21,9 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://accounts.google.com/gsi/client" async></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+     crossorigin=""/>
     <style>
       @keyframes modal-fade-in {
         from {
@@ -73,7 +90,7 @@
 
       body {
         background-color: #f8fafc; /* slate-50 */
-        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Cg fill-rule='evenodd'%3E%3Cg fill='%23e2e8f0' fill-opacity='0.4'%3E%3Cpath opacity='.5' d='M96 95h4v1h-4v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h4v1h-4v9h4v1h-4v9h4v1h-4v9h4v1h-4v9h4v1h-4v9h4v1h-4v9h4v1h-4v9h4v1h-4v9zm-1 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-9-10h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm9-10v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-9-10h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm9-10v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-9-10h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm9-10v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-9-10h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9z'/%3E%3Cpath d='M6 6h2v2H6V6zm2 2h2v2H8V8zm-2 2h2v2H6v-2zm2 2h2v2H8v-2zm-2 2h2v2H6v-2zm2 2h2v2H8v-2zm-2 2h2v2H6v-2zm2 2h2v2H8v-2zm-2 2h2v2H6v-2zm2 2h2v2H8v-2zm-2 2h2v2H6v-2zm2 2h2v2H8v-2zm-2 2h2v2H6v-2zm2 2h2v2H8v-2zm-2 2h2v2H6v-2zm2 2h2v2H8v-2z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Cg fill-rule='evenodd'%3E%3Cg fill='%23e2e8f0' fill-opacity='0.4'%3E%3Cpath opacity='.5' d='M96 95h4v1h-4v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h4v1h-4v9h4v1h-4v9h4v1h-4v9h4v1h-4v9h4v1h-4v9h4v1h-4v9h4v1h-4v9h4v1h-4v9zm-1 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-9-10h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm9-10v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-9-10h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm9-10v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-9-10h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm9-10v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-9-10h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9z'/%3E%3Cpath d='M6 6h2v2H6V6zm2 2h2v2H8V8zm-2 2h2v2H6v-2zm2 2h2v2H8v-2zm-2 2h2v2H6v-2zm2 2h2v2H8v-2zm-2 2h2v2H6v-2zm2 2h2v2H8v-2zm-2 2h2v2H6v-2zm2 2h2v2H8v-2zm-2 2h2v2H6v-2zm2 2h2v2H8v-2zm-2 2h2v2H6v-2zm2 2h2v2H8v-2zm-2 2h2v2H6v-2zm2 2h2v2H8v-2z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
       }
        button:active, .button-active-effect:active {
         transform: scale(0.96);
@@ -134,6 +151,67 @@
         background: #e2e8f0; /* slate-200 */
         border-radius: 9999px;
       }
+      /* Roulette Styles */
+      .roulette-container {
+        position: relative;
+        width: 300px;
+        height: 200px;
+        overflow: hidden;
+        border-radius: 12px;
+        border: 4px solid #e2e8f0; /* slate-200 */
+        background: #f1f5f9; /* slate-100 */
+        box-shadow: inset 0 0 10px rgba(0,0,0,0.1);
+      }
+      .roulette-wheel {
+        transition: transform 3s cubic-bezier(0.25, 1, 0.5, 1);
+      }
+      .roulette-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 200px;
+      }
+      .roulette-item img {
+        width: 100%;
+        height: 120px;
+        object-fit: cover;
+      }
+      .roulette-item p {
+        font-weight: 600;
+        padding: 8px;
+        text-align: center;
+        width: 100%;
+        background-color: rgba(255, 255, 255, 0.8);
+      }
+      .roulette-highlight {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 200px;
+        border-top: 4px solid #0284c7; /* primary */
+        border-bottom: 4px solid #0284c7; /* primary */
+        box-sizing: border-box;
+        pointer-events: none;
+        z-index: 3;
+      }
+      .roulette-shadow-top, .roulette-shadow-bottom {
+        position: absolute;
+        left: 0;
+        right: 0;
+        height: 80px;
+        pointer-events: none;
+        z-index: 2;
+      }
+      .roulette-shadow-top {
+        top: 0;
+        background: linear-gradient(to bottom, rgba(241, 245, 249, 1) 20%, rgba(241, 245, 249, 0));
+      }
+      .roulette-shadow-bottom {
+        bottom: 0;
+        background: linear-gradient(to top, rgba(241, 245, 249, 1) 20%, rgba(241, 245, 249, 0));
+      }
     </style>
     <script>
       tailwind.config = {
@@ -182,22 +260,9 @@
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Caveat:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <script type="importmap">
-{
-  "imports": {
-    "react/": "https://esm.sh/react@^19.1.1/",
-    "react": "https://esm.sh/react@^19.1.1",
-    "react-dom/": "https://esm.sh/react-dom@^19.1.1/",
-    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.53.0",
-    "@google/genai": "https://esm.sh/@google/genai@^1.12.0",
-    "chart.js": "https://esm.sh/chart.js@^4.4.3",
-    "react-chartjs-2": "https://esm.sh/react-chartjs-2@^5.2.0"
-  }
-}
-</script>
-</head>
-  <body class="bg-slate-50 text-dark font-sans antialiased">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Caveat:wght@700&display=swap" rel="stylesheet">
+  </head>
+  <body>
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>

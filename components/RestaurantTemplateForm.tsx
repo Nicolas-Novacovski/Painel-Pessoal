@@ -103,7 +103,7 @@ const CuratedListForm: React.FC<CuratedListFormProps> = ({ onSave, onClose, init
             <div>
                  <h4 className="font-medium text-slate-700 mb-2">Adicionar Restaurantes por Filtro</h4>
                  <div className="flex gap-2 p-3 bg-slate-100 rounded-lg">
-                    <select value={cuisineFilter} onChange={e => setCuisineFilter(e.target.value)} className="w-full p-2 bg-white border border-slate-300 rounded-lg">
+                    <select value={cuisineFilter} onChange={e => setCuisineFilter(e.target.value)} className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-900">
                         <option value="all">Selecione uma culinária...</option>
                         {uniqueCuisines.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>

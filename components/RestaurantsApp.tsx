@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Restaurant, Review, User, RestaurantCategory, Memory, DatePlan, UserProfile, CuratedList } from '../types';
 import { RESTAURANT_CATEGORIES, ADMIN_COUPLE_EMAILS, USERS } from '../constants';
-import { PlusIcon, SparklesIcon, ChevronDownIcon, BookmarkIcon, InformationCircleIcon } from './Icons';
+import { PlusIcon, SparklesIcon, ChevronDownIcon, BookmarkIcon, InformationCircleIcon, MapIcon, TicketIcon } from './Icons';
 import { Modal, Button, Input, SegmentedControl } from './UIComponents';
 import { RestaurantCard } from './RestaurantCard';
 import { RestaurantForm } from './RestaurantForm';
@@ -10,6 +10,9 @@ import { RestaurantDiscovery } from './RestaurantDiscovery';
 import { supabase } from '../utils/supabase';
 import { averageRating, extractNeighborhood, calculateDistance } from '../utils/helpers';
 import { GoogleGenAI, Type } from "@google/genai";
+import DateRoulette from './DateRoulette';
+import AchievementsMap from './AchievementsMap';
+
 
 interface RestaurantsAppProps {
     currentUser: UserProfile;
@@ -151,6 +154,8 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser, onProfileU
     const [isImporting, setIsImporting] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
+    const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
+    const [isRouletteOpen, setIsRouletteOpen] = useState(false);
 
     const fetchData = useCallback(async () => {
         if (!currentUser.couple_id) {
@@ -561,6 +566,13 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser, onProfileU
     const hasItemsOnList = coupleRestaurants.length > 0;
     const hasCuratedLists = curatedLists.length > 0;
 
+    const visitedRestaurants = useMemo(() => {
+        const coupleMemberNames = coupleProfiles.map(p => p.name);
+        return coupleRestaurants.filter(r => 
+            r.reviews && r.reviews.some(review => coupleMemberNames.includes(review.user as string))
+        );
+    }, [coupleRestaurants, coupleProfiles]);
+
     const filteredAndSortedRestaurants = useMemo(() => {
         const selectedProfile = coupleProfiles.find(p => p.email === proximityFilter);
 
@@ -663,10 +675,18 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser, onProfileU
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                     className="flex-grow"
                                 />
+                                 <SegmentedControl
+                                    value={viewMode}
+                                    onChange={(value) => setViewMode(value as 'list' | 'map')}
+                                    options={[
+                                        { label: 'Lista', value: 'list' },
+                                        { label: 'Mapa', value: 'map' }
+                                    ]}
+                                />
                                 {hasCuratedLists && (
                                     <Button variant="secondary" onClick={() => setModalContent('import')}>
                                         <BookmarkIcon className="w-5 h-5"/>
-                                        <span>Importar Listas</span>
+                                        <span>Importar</span>
                                     </Button>
                                 )}
                             </div>
@@ -675,14 +695,14 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser, onProfileU
                                     <span>Filtros e Ordenação</span>
                                     <ChevronDownIcon className={`w-5 h-5 transition-transform ${filtersOpen ? 'rotate-180' : ''}`} />
                                 </button>
-                                {filtersOpen && (
+                                {filtersOpen && viewMode === 'list' && (
                                     <div className="mt-2 pt-4 border-t space-y-4 animate-fade-in">
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value as any)} className="w-full p-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition">
+                                            <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value as any)} className="w-full p-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition text-slate-900">
                                                 <option value="all">Todas as Categorias</option>
                                                 {RESTAURANT_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                                             </select>
-                                            <select value={cuisineFilter} onChange={e => setCuisineFilter(e.target.value)} className="w-full p-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition">
+                                            <select value={cuisineFilter} onChange={e => setCuisineFilter(e.target.value)} className="w-full p-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition text-slate-900">
                                                 <option value="all">Todos os Tipos</option>
                                                 {uniqueCuisines.map(c => <option key={c} value={c}>{c}</option>)}
                                             </select>
@@ -690,7 +710,7 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser, onProfileU
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             <div>
                                                 <label htmlFor="neighborhood-filter" className="text-sm font-medium text-slate-600 block mb-1">Filtrar por Bairro:</label>
-                                                <select id="neighborhood-filter" value={neighborhoodFilter} onChange={e => setNeighborhoodFilter(e.target.value)} className="w-full p-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition">
+                                                <select id="neighborhood-filter" value={neighborhoodFilter} onChange={e => setNeighborhoodFilter(e.target.value)} className="w-full p-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition text-slate-900">
                                                     <option value="all">Todos os Bairros</option>
                                                     {uniqueNeighborhoods.map(n => <option key={n} value={n}>{n}</option>)}
                                                 </select>
@@ -746,7 +766,7 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser, onProfileU
                                         </div>
                                         <div>
                                             <label htmlFor="sort-by" className="text-sm font-medium text-slate-600 block mb-1">Ordenar por:</label>
-                                            <select id="sort-by" value={sortBy} onChange={e => setSortBy(e.target.value as any)} className="w-full p-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition">
+                                            <select id="sort-by" value={sortBy} onChange={e => setSortBy(e.target.value as any)} className="w-full p-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition text-slate-900">
                                                 <option value="name">Nome (A-Z)</option>
                                                 {proximityFilter !== 'all' && <option value="distance">Mais Próximo</option>}
                                                 <option value="rating_our">Melhor Avaliação (Nossa)</option>
@@ -760,26 +780,32 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser, onProfileU
                                 )}
                             </div>
                         </div>
+                        {viewMode === 'list' ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                                {filteredAndSortedRestaurants.map(r => {
+                                    const distanceToDisplay = (proximityFilter !== 'all' && r.distance !== Infinity)
+                                        ? Math.min(r.distance * 1.3, proximityRadius)
+                                        : r.distance;
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                            {filteredAndSortedRestaurants.map(r => {
-                                const distanceToDisplay = (proximityFilter !== 'all' && r.distance !== Infinity)
-                                    ? Math.min(r.distance * 1.3, proximityRadius)
-                                    : r.distance;
-
-                                return (
-                                    <RestaurantCard 
-                                        key={r.id} 
-                                        restaurant={r} 
-                                        distance={distanceToDisplay} 
-                                        onSelect={setModalContent} 
-                                        onToggleFavorite={handleToggleFavorite} 
-                                        onRemoveFromList={handleRemoveFromList} 
-                                        currentUser={currentUser.name as User} 
-                                    />
-                                );
-                            })}
-                        </div>
+                                    return (
+                                        <RestaurantCard 
+                                            key={r.id} 
+                                            restaurant={r} 
+                                            distance={distanceToDisplay} 
+                                            onSelect={setModalContent} 
+                                            onToggleFavorite={handleToggleFavorite} 
+                                            onRemoveFromList={handleRemoveFromList} 
+                                            currentUser={currentUser.name as User} 
+                                        />
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                             <AchievementsMap
+                                restaurants={filteredAndSortedRestaurants}
+                                onSelectRestaurant={(r) => setModalContent(r as CoupleRestaurant)}
+                            />
+                        )}
                     </>
                 ) : (
                     <EmptyState
@@ -790,8 +816,11 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser, onProfileU
                 )}
                  
                  <div className="fixed bottom-6 right-6 z-30 flex flex-col gap-3">
-                    <Button onClick={handleOpenDiscovery} disabled={isLoading} className="!rounded-full !p-4 shadow-lg animate-glow" variant="accent" title="Modo Descoberta">
+                    <Button onClick={handleOpenDiscovery} disabled={isLoading || viewMode === 'map'} className="!rounded-full !p-4 shadow-lg" variant="accent" title="Tinder de Restaurantes">
                         <SparklesIcon className="w-6 h-6"/>
+                    </Button>
+                    <Button onClick={() => setIsRouletteOpen(true)} disabled={isLoading || viewMode === 'map'} className="!rounded-full !p-4 shadow-lg" variant="accent" title="Roleta do Date">
+                        <TicketIcon className="w-6 h-6"/>
                     </Button>
                     <Button onClick={() => setModalContent('add')} className="!rounded-full !p-4 shadow-lg" variant="primary" title="Adicionar Novo Restaurante"><PlusIcon className="w-6 h-6"/></Button>
                 </div>
@@ -848,6 +877,16 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser, onProfileU
             </Modal>
             <Modal isOpen={editingRestaurant !== null} onClose={() => setEditingRestaurant(null)} title={`Editando: ${editingRestaurant?.name || ''}`}>
                 <RestaurantForm initialData={editingRestaurant} onSave={(data) => handleSaveRestaurant(data, editingRestaurant?.id)} onClose={() => setEditingRestaurant(null)} />
+            </Modal>
+             <Modal isOpen={isRouletteOpen} onClose={() => setIsRouletteOpen(false)} title="">
+                <DateRoulette
+                    restaurants={coupleRestaurants}
+                    currentUser={currentUser.name as User}
+                    onClose={() => setIsRouletteOpen(false)}
+                    onSelectRestaurant={(r) => setModalContent(r)}
+                    onToggleFavorite={handleToggleFavorite}
+                    onRemoveFromList={handleRemoveFromList}
+                />
             </Modal>
             {isDiscoveryOpen && (
                 <div className="fixed inset-0 bg-slate-100 z-50 animate-fade-in">

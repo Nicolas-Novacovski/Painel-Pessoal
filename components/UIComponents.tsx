@@ -12,7 +12,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex justify-center items-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[1000] flex justify-center items-center p-4" onClick={onClose}>
       <div style={{animation: 'modal-fade-in 0.3s cubic-bezier(0.16, 1, 0.3, 1)'}} className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="p-6 md:p-8 border-b border-gray-200">
             <div className="flex justify-between items-center">
@@ -166,7 +166,7 @@ export const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttribute
     return (
         <input 
             ref={ref}
-            className={`w-full p-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition ${className}`} 
+            className={`w-full p-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition text-slate-900 placeholder:text-slate-400 ${className}`} 
             {...props}
         />
     )
