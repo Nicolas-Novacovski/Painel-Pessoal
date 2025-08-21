@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useLocalStorage } from './hooks/useLocalStorage';
-import { View, UserProfile, User } from './types';
+import { View, UserProfile, User, Role } from './types';
 import { supabase } from './utils/supabase';
 
 import RestaurantsApp from './components/RestaurantsApp';
@@ -71,11 +71,24 @@ const App: React.FC = () => {
                                     }
 
                                     if (userProfiles && userProfiles.length > 0) {
-                                        const userProfile = userProfiles[0];
+                                        const dbProfile = userProfiles[0];
                                         if (userProfiles.length > 1) {
                                             console.warn(`[Login] Multiple profiles found for email ${gUser.email}. Using the first one found.`);
                                         }
-                                        setCurrentUser({ ...userProfile, picture: gUser.picture });
+                                        
+                                        const userProfile: UserProfile = {
+                                            email: dbProfile.email,
+                                            name: dbProfile.name,
+                                            picture: gUser.picture,
+                                            role: dbProfile.role as Role,
+                                            couple_id: dbProfile.couple_id,
+                                            allowed_views: dbProfile.allowed_views as View[] | null,
+                                            address: dbProfile.address,
+                                            latitude: dbProfile.latitude,
+                                            longitude: dbProfile.longitude
+                                        };
+
+                                        setCurrentUser(userProfile);
                                         setAuthError(null); // Clear any previous errors on successful login
                                     } else {
                                         // User not in our DB, deny access

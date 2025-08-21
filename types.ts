@@ -1,3 +1,5 @@
+/// <reference types="vite/client" />
+
 // --- Core Types ---
 export type Role = 'admin' | 'partner' | 'parent' | 'visitor';
 export type View = 'dashboard' | 'restaurants' | 'expenses' | 'recipes' | 'reminders' | 'wellness' | 'lists' | 'applications' | 'admin' | 'ai-recommender' | 'travel';

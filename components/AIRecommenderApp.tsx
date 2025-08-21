@@ -1,3 +1,5 @@
+
+
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { UserProfile, AIRecommendation, AIRecommenderHistoryItem } from '../types';
 import { Button, PriceRatingDisplay, StarRatingDisplay } from './UIComponents';
@@ -284,17 +286,22 @@ const AIRecommenderApp: React.FC<AIRecommenderAppProps> = ({ currentUser }) => {
                 const { data: newRestaurant, error: insertError } = await supabase
                     .from('restaurants')
                     .insert([{
-                        name: rec.restaurant_name, category: rec.category, cuisine: rec.category,
+                        name: rec.restaurant_name,
+                        category: rec.category,
+                        cuisine: rec.category,
+                        city: 'Curitiba',
                         locations: [{ address: rec.address, latitude: null, longitude: null }],
-                        image: rec.image_url, wants_to_go: [], reviews: [],
-                        addedBy: currentUser.name, price_range: rec.price_range,
-                        google_rating: rec.rating, google_rating_source_uri: rec.maps_url,
-                    }] as any).select('id').single();
+                        image: rec.image_url,
+                        addedBy: currentUser.name,
+                        price_range: rec.price_range,
+                        google_rating: rec.rating,
+                        google_rating_source_uri: rec.maps_url,
+                    }]).select('id').single();
                 if (insertError) throw insertError;
                 restaurantId = newRestaurant.id;
             }
 
-            const { error: linkError } = await supabase.from('couple_restaurants').upsert({ couple_id: currentUser.couple_id, restaurant_id: restaurantId });
+            const { error: linkError } = await supabase.from('couple_restaurants').upsert([{ couple_id: currentUser.couple_id, restaurant_id: restaurantId }]);
             if (linkError) throw linkError;
             alert(`${rec.restaurant_name} foi adicionado à sua lista!`);
         } catch(e) {

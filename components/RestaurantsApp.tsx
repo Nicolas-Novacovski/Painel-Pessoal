@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Restaurant, Review, User, RestaurantCategory, Memory, DatePlan, UserProfile, CuratedList, Location } from '../types';
 import { RESTAURANT_CATEGORIES, ADMIN_COUPLE_EMAILS, USERS } from '../constants';
@@ -155,6 +156,7 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser, onProfileU
     const [tourFilter, setTourFilter] = useState<'all' | 'tour_only'>('all');
     const [priceFilters, setPriceFilters] = useState<number[]>([]);
     const [visitedFilter, setVisitedFilter] = useState<'all' | 'visited' | 'not_visited'>('all');
+    const [favoriteFilter, setFavoriteFilter] = useState<'all' | 'favorites_only'>('all');
     const [sortBy, setSortBy] = useState<'name' | 'rating_our' | 'rating_google' | 'price_asc' | 'price_desc' | 'recent' | 'distance'>('name');
     const [filtersOpen, setFiltersOpen] = useState(false);
     
@@ -437,8 +439,8 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser, onProfileU
         if (!restaurant) return;
     
         try {
-            const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
-            const prompt = `Your task is to find the precise latitude and longitude for a given address using Google Search. The address is: "${locationToUpdate.address}". The context is the city of Curitiba, PR, Brazil. Return ONLY a valid JSON object with "latitude" and "longitude" as keys. Example of a perfect response: {"latitude": -25.4284, "longitude": -49.2733}. If you cannot determine the coordinates with high confidence, return {"latitude": null, "longitude": null}. Do not add any other text or markdown.`;
+            const ai = new GoogleGenAI({apiKey: import.meta.env.VITE_GEMINI_API_KEY});
+            const prompt = `Your task is to find the precise latitude and longitude for a given address using Google Search. The address is: "${locationToUpdate.address}". The context is the city of Curitiba, PR, Brazil. Return ONLY a valid JSON object with "latitude" and "longitude" keys. Example of a perfect response: {"latitude": -25.4284, "longitude": -49.2733}. If you cannot determine the coordinates with high confidence, return {"latitude": null, "longitude": null}. Do not add any other text or markdown.`;
             
             const response = await ai.models.generateContent({
                 model: 'gemini-2.5-flash',
@@ -554,7 +556,7 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser, onProfileU
 
     const handleSaveAddress = async (address: string) => {
         try {
-            const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
+            const ai = new GoogleGenAI({apiKey: import.meta.env.VITE_GEMINI_API_KEY});
             const prompt = `Geocode the address "${address}" and return ONLY a valid JSON object with "latitude" and "longitude" keys. Example: {"latitude": -25.4284, "longitude": -49.2733}. If not found, return {"latitude": null, "longitude": null}.`;
             const response = await ai.models.generateContent({
                 model: 'gemini-2.5-flash',
@@ -679,6 +681,8 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser, onProfileU
                 if (cuisineFilter !== 'all' && !(r.cuisine && r.cuisine.toLowerCase().includes(cuisineFilter.toLowerCase()))) return false;
                 
                 if (tourFilter === 'all' ? false : !r.inTourOqfc) return false;
+
+                if (favoriteFilter === 'favorites_only' && !r.is_favorited) return false;
                 
                 const term = searchTerm.toLowerCase();
                 if (term && !(r.name.toLowerCase().includes(term) || (r.cuisine && r.cuisine.toLowerCase().includes(term)) || (r.locations && r.locations.some(l => l.address.toLowerCase().includes(term))))) {
@@ -719,7 +723,7 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser, onProfileU
                         return a.name.localeCompare(b.name);
                 }
             });
-    }, [coupleRestaurants, currentUser.name, categoryFilter, cuisineFilter, searchTerm, tourFilter, priceFilters, visitedFilter, sortBy, neighborhoodFilter, proximityFilter, proximityRadius, coupleProfiles, currentCity]);
+    }, [coupleRestaurants, currentUser.name, categoryFilter, cuisineFilter, searchTerm, tourFilter, priceFilters, visitedFilter, favoriteFilter, sortBy, neighborhoodFilter, proximityFilter, proximityRadius, coupleProfiles, currentCity]);
 
     if (isLoading) {
         return <div className="p-6 text-center text-slate-500">Carregando restaurantes...</div>;
@@ -879,9 +883,17 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser, onProfileU
                                                 />
                                             </div>
                                         )}
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                                             <SegmentedControl value={visitedFilter} onChange={(value) => setVisitedFilter(value)} options={[{label: 'Todos', value: 'all'},{label: 'Já Fui', value: 'visited'},{label: 'Não Fui', value: 'not_visited'}]}/>
                                             <SegmentedControl value={tourFilter} onChange={(value) => setTourFilter(value)} options={[{ label: 'Todos', value: 'all' },{ label: 'Apenas Tour OQFC', value: 'tour_only' }]}/>
+                                            <SegmentedControl
+                                                value={favoriteFilter}
+                                                onChange={(value) => setFavoriteFilter(value)}
+                                                options={[
+                                                    { label: 'Todos', value: 'all' },
+                                                    { label: 'Favoritos', value: 'favorites_only' }
+                                                ]}
+                                            />
                                         </div>
                                         <div>
                                             <label className="text-sm font-medium text-slate-600 block mb-2">Filtrar por Preço:</label>

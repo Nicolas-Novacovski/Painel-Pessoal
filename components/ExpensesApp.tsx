@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '../utils/supabase';
 import { User, Expense, PaymentSource, RecurringExpense, MonthlyClosing, Goal, AIAnalysis, BarChartData, UserProfile } from '../types';

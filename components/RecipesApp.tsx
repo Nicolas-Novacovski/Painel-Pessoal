@@ -1223,7 +1223,8 @@ const DrinksSection: React.FC<{ currentUser: User }> = ({ currentUser }) => {
     useEffect(() => { const channel = supabase.channel('realtime-drinks').on('postgres_changes', { event: '*', schema: 'public', table: 'drinks' }, fetchDrinks).subscribe(); return () => { supabase.removeChannel(channel); }; }, [fetchDrinks]);
 
     const handleOpenFormWithImportedData = (data: Partial<Drink>) => { setIsImportModalOpen(false); setEditingDrink(data as Drink); setIsFormModalOpen(true); };
-    const handleSaveDrink = async (drinkData: Omit<Drink, 'id' | 'added_by'|'created_at'>, imageFile: File | null) => {
+    
+    const handleSaveDrink = async (drinkData: Omit<Drink, 'id' | 'added_by' | 'created_at'>, imageFile: File | null) => {
         let imageUrl = editingDrink?.image_url || (drinkData as Drink).image_url || null;
         try {
             if (imageFile) {
@@ -1235,16 +1236,40 @@ const DrinksSection: React.FC<{ currentUser: User }> = ({ currentUser }) => {
             }
             const dataToSave = { ...drinkData, image_url: imageUrl };
             if (editingDrink?.id) {
-                const { data } = await supabase.from('drinks').update(dataToSave as any).eq('id', editingDrink.id).select().single();
+                const { data, error } = await supabase.from('drinks').update(dataToSave as any).eq('id', editingDrink.id).select().single();
+                if (error) throw error;
                 if(data) setSelectedDrink(data as any);
             } else {
-                const { data } = await supabase.from('drinks').insert([{ ...dataToSave, added_by: currentUser }] as any).select().single();
+                const { data, error } = await supabase.from('drinks').insert([{ ...dataToSave, added_by: currentUser }] as any).select().single();
+                if (error) throw error;
                 if(data) setSelectedDrink(data as any);
             }
-            setIsFormModalOpen(false); setEditingDrink(null);
-        } catch (error) { console.error("Error saving drink:", error); alert("Erro ao salvar drink."); }
+            await fetchDrinks();
+            setIsFormModalOpen(false);
+            setEditingDrink(null);
+        } catch (error) {
+            console.error("Error saving drink:", error);
+            alert("Erro ao salvar drink.");
+        }
     };
-    const handleDeleteDrink = async (drink: Drink) => { if (window.confirm(`Apagar "${drink.name}"?`)) { if (drink.image_url) { const oldPath = new URL(drink.image_url).pathname.split('/recipe-images/')[1]; if (oldPath) await supabase.storage.from('recipe-images').remove([oldPath]); } await supabase.from('drinks').delete().eq('id', drink.id); if(selectedDrink?.id === drink.id) setSelectedDrink(null); } };
+
+    const handleDeleteDrink = async (drink: Drink) => {
+        if (window.confirm(`Apagar "${drink.name}"?`)) {
+            try {
+                if (drink.image_url) {
+                    const oldPath = new URL(drink.image_url).pathname.split('/recipe-images/')[1];
+                    if (oldPath) await supabase.storage.from('recipe-images').remove([oldPath]);
+                }
+                const { error } = await supabase.from('drinks').delete().eq('id', drink.id);
+                if (error) throw error;
+                if (selectedDrink?.id === drink.id) setSelectedDrink(null);
+                await fetchDrinks();
+            } catch (error) {
+                console.error("Error deleting drink:", error);
+                alert("Erro ao apagar drink.");
+            }
+        }
+    };
 
     return (
         <>

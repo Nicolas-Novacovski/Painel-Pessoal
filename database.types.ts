@@ -34,7 +34,7 @@ export interface Database {
           instructions?: string | null;
           added_by?: string | null;
         };
-        Update: Partial<{
+        Update: {
           id?: string;
           created_at?: string;
           name?: string;
@@ -45,7 +45,7 @@ export interface Database {
           ingredients?: Json | null;
           instructions?: string | null;
           added_by?: string | null;
-        }>;
+        };
       };
       couple_restaurants: {
         Row: {
@@ -60,12 +60,12 @@ export interface Database {
           created_at?: string;
           is_favorited?: boolean;
         };
-        Update: Partial<{
+        Update: {
           couple_id?: string;
           restaurant_id?: string;
           created_at?: string;
           is_favorited?: boolean;
-        }>;
+        };
       };
       curated_lists: {
         Row: {
@@ -84,14 +84,14 @@ export interface Database {
           restaurant_ids: Json;
           icon?: string | null;
         };
-        Update: Partial<{
+        Update: {
           id?: string;
           created_at?: string;
           name?: string;
           description?: string | null;
           restaurant_ids?: Json;
           icon?: string | null;
-        }>;
+        };
       };
       user_profiles: {
         Row: {
@@ -114,7 +114,7 @@ export interface Database {
           latitude?: number | null;
           longitude?: number | null;
         };
-        Update: Partial<{
+        Update: {
           email?: string;
           name?: string;
           role?: string;
@@ -123,7 +123,7 @@ export interface Database {
           address?: string | null;
           latitude?: number | null;
           longitude?: number | null;
-        }>;
+        };
       };
       lists: {
         Row: {
@@ -148,7 +148,7 @@ export interface Database {
           user_email: string;
           is_done?: boolean;
         };
-        Update: Partial<{
+        Update: {
           id?: string;
           created_at?: string;
           title?: string;
@@ -158,7 +158,7 @@ export interface Database {
           list_type?: string;
           user_email?: string;
           is_done?: boolean;
-        }>;
+        };
       };
       job_applications: {
         Row: {
@@ -181,7 +181,7 @@ export interface Database {
           image_url?: string | null;
           user_email: string;
         };
-        Update: Partial<{
+        Update: {
           id?: string;
           created_at?: string;
           company_name?: string;
@@ -190,7 +190,7 @@ export interface Database {
           notes?: string | null;
           image_url?: string | null;
           user_email?: string;
-        }>;
+        };
       };
       restaurants: {
         Row: {
@@ -239,7 +239,7 @@ export interface Database {
           created_at?: string;
           weekly_promotions?: string | null;
         };
-        Update: Partial<{
+        Update: {
           id?: string;
           name?: string;
           category?: string;
@@ -261,7 +261,7 @@ export interface Database {
           vibe?: string | null;
           created_at?: string;
           weekly_promotions?: string | null;
-        }>;
+        };
       };
       recipes: {
         Row: {
@@ -288,7 +288,7 @@ export interface Database {
           instructions?: string | null;
           added_by?: string | null;
         };
-        Update: Partial<{
+        Update: {
           id?: string;
           created_at?: string;
           name?: string;
@@ -299,7 +299,7 @@ export interface Database {
           ingredients?: Json | null;
           instructions?: string | null;
           added_by?: string | null;
-        }>;
+        };
       };
       expenses: {
         Row: {
@@ -322,7 +322,7 @@ export interface Database {
           is_paid?: boolean;
           couple_id?: string | null;
         };
-        Update: Partial<{
+        Update: {
           id?: string;
           created_at?: string;
           description?: string;
@@ -331,7 +331,7 @@ export interface Database {
           payment_source?: string;
           is_paid?: boolean;
           couple_id?: string | null;
-        }>;
+        };
       };
       recurring_expenses: {
         Row: {
@@ -362,7 +362,7 @@ export interface Database {
           google_calendar_event_id?: string | null;
           couple_id?: string | null;
         };
-        Update: Partial<{
+        Update: {
           id?: string;
           created_at?: string;
           description?: string;
@@ -375,7 +375,7 @@ export interface Database {
           is_active?: boolean;
           google_calendar_event_id?: string | null;
           couple_id?: string | null;
-        }>;
+        };
       };
       reminders: {
         Row: {
@@ -402,7 +402,7 @@ export interface Database {
           assigned_to: Json;
           subtasks?: Json | null;
         };
-        Update: Partial<{
+        Update: {
           id?: string;
           created_at?: string;
           title?: string;
@@ -413,7 +413,7 @@ export interface Database {
           created_by?: string;
           assigned_to?: Json;
           subtasks?: Json | null;
-        }>;
+        };
       };
       monthly_closings: {
         Row: {
@@ -440,7 +440,7 @@ export interface Database {
           analysis?: Json | null;
           couple_id?: string | null;
         };
-        Update: Partial<{
+        Update: {
           id?: string;
           created_at?: string;
           month_year?: string;
@@ -451,7 +451,7 @@ export interface Database {
           goal_allocations?: Json | null;
           analysis?: Json | null;
           couple_id?: string | null;
-        }>;
+        };
       };
       goals: {
         Row: {
@@ -474,7 +474,7 @@ export interface Database {
             is_archived?: boolean;
             couple_id?: string | null;
         };
-        Update: Partial<{
+        Update: {
             id?: string;
             created_at?: string;
             name?: string;
@@ -483,7 +483,7 @@ export interface Database {
             created_by?: string;
             is_archived?: boolean;
             couple_id?: string | null;
-        }>;
+        };
       };
       habits: {
         Row: {
@@ -500,13 +500,13 @@ export interface Database {
             icon?: string | null;
             users: string[];
         };
-        Update: Partial<{
+        Update: {
             id?: string;
             created_at?: string;
             name?: string;
             icon?: string | null;
             users?: string[];
-        }>;
+        };
       };
       habit_entries: {
         Row: {
@@ -523,13 +523,13 @@ export interface Database {
             user_id: string;
             entry_date: string;
         };
-        Update: Partial<{
+        Update: {
             id?: string;
             created_at?: string;
             habit_id?: string;
             user_id?: string;
             entry_date?: string;
-        }>;
+        };
       };
       mood_entries: {
         Row: {
@@ -546,13 +546,13 @@ export interface Database {
             mood: number;
             entry_date: string;
         };
-        Update: Partial<{
+        Update: {
             id?: string;
             created_at?: string;
             user_id?: string;
             mood?: number;
             entry_date?: string;
-        }>;
+        };
       };
       date_plans: {
         Row: {
@@ -577,7 +577,7 @@ export interface Database {
           status?: string;
           participants_status: Json;
         };
-        Update: Partial<{
+        Update: {
           id?: string;
           created_at?: string;
           restaurant_id?: string;
@@ -587,7 +587,7 @@ export interface Database {
           proposed_datetime?: string;
           status?: string;
           participants_status?: Json;
-        }>;
+        };
       };
       trips: {
         Row: {
@@ -618,7 +618,7 @@ export interface Database {
           checklist?: Json | null;
           travelers?: number;
         };
-        Update: Partial<{
+        Update: {
           id?: string;
           created_at?: string;
           name?: string;
@@ -631,7 +631,7 @@ export interface Database {
           couple_id?: string;
           checklist?: Json | null;
           travelers?: number;
-        }>;
+        };
       };
       trip_itinerary_items: {
         Row: {
@@ -660,7 +660,7 @@ export interface Database {
           is_completed?: boolean;
           cost?: number | null;
         };
-        Update: Partial<{
+        Update: {
           id?: string;
           created_at?: string;
           trip_id?: string;
@@ -672,7 +672,7 @@ export interface Database {
           details?: Json | null;
           is_completed?: boolean;
           cost?: number | null;
-        }>;
+        };
       };
       trip_expenses: {
         Row: {
@@ -697,7 +697,7 @@ export interface Database {
           user_email?: string | null;
           itinerary_item_id?: string | null;
         };
-        Update: Partial<{
+        Update: {
           id?: string;
           created_at?: string;
           trip_id?: string;
@@ -707,7 +707,7 @@ export interface Database {
           payment_date?: string;
           user_email?: string | null;
           itinerary_item_id?: string | null;
-        }>;
+        };
       };
       trip_gallery_items: {
         Row: {
@@ -726,14 +726,14 @@ export interface Database {
           caption?: string | null;
           is_inspiration?: boolean;
         };
-        Update: Partial<{
+        Update: {
           id?: string;
           created_at?: string;
           trip_id?: string;
           image_url?: string;
           caption?: string | null;
           is_inspiration?: boolean;
-        }>;
+        };
       };
     };
     Views: {
