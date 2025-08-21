@@ -482,7 +482,7 @@ Se nenhuma promoção ativa for encontrada, retorne APENAS a frase: "Nenhuma pro
                             <h4 className="font-bold text-dark mb-2">Nossa Avaliação ({calculatedAverageRating.toFixed(1)})</h4>
                              <div className="space-y-2">
                                 <div className="p-2 bg-white/50 rounded">
-                                    <p className="font-semibold text-sm">{currentUser === 'Nicolas' ? 'Nicolas' : 'Ana'}</p>
+                                    <p className="font-semibold text-sm">{currentUser.name === 'Nicolas' ? 'Nicolas' : 'Ana'}</p>
                                     <StarRatingDisplay rating={restaurant.reviews.find(r => r.user === currentUser.name)?.rating || 0} />
                                 </div>
                                 {partnerReview && (

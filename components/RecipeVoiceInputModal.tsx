@@ -1,5 +1,3 @@
-/// <reference types="vite/client" />
-
 import React, { useState, useEffect, useRef } from 'react';
 import { GoogleGenAI, Type } from "@google/genai";
 import { Button } from './UIComponents';

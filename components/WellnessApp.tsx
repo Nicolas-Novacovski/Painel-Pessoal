@@ -1,5 +1,3 @@
-/// <reference types="vite/client" />
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../utils/supabase';
 import { User, Habit, HabitEntry, MoodEntry } from '../types';

@@ -1,5 +1,3 @@
-/// <reference types="vite/client" />
-
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Restaurant, Review, User, RestaurantCategory, Memory, DatePlan, UserProfile, CuratedList, Location } from '../types';
 import { RESTAURANT_CATEGORIES, ADMIN_COUPLE_EMAILS, USERS } from '../constants';
@@ -866,4 +864,180 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser, onProfileU
                                                     </label>
                                                     <div className="relative group flex items-center">
                                                         <InformationCircleIcon className="w-5 h-5 text-slate-400 cursor-help" />
-                                                        <span className="absolute bottom-full left-1/
+                                                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max px-3 py-1.5 bg-slate-800 text-white text-xs font-semibold rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-lg z-10">
+                                                            Distância máxima a partir do local selecionado
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <input
+                                                    id="proximity-radius"
+                                                    type="range"
+                                                    min="1"
+                                                    max="25"
+                                                    step="1"
+                                                    value={proximityRadius}
+                                                    onChange={(e) => setProximityRadius(Number(e.target.value))}
+                                                    className="custom-range-slider"
+                                                />
+                                            </div>
+                                        )}
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 pt-4 border-t">
+                                            {[1, 2, 3, 4].map(p => (
+                                                <button key={p} onClick={() => handleTogglePriceFilter(p)} className={`px-3 py-1.5 text-sm font-bold rounded-lg transition-colors ${priceFilters.includes(p) ? 'bg-green-500 text-white' : 'bg-slate-200 text-slate-700'}`}>
+                                                    {'$'.repeat(p)}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
+                                            <button onClick={() => setTourFilter(prev => prev === 'all' ? 'tour_only' : 'all')} className={`p-2 rounded-lg font-semibold transition-colors ${tourFilter === 'tour_only' ? 'bg-amber-500 text-white' : 'bg-slate-200'}`}>TOUR OQFC</button>
+                                            <button onClick={() => setVisitedFilter(prev => prev === 'all' ? 'visited' : (prev === 'visited' ? 'not_visited' : 'all'))} className={`p-2 rounded-lg font-semibold transition-colors ${visitedFilter !== 'all' ? 'bg-primary text-white' : 'bg-slate-200'}`}>{visitedFilter === 'visited' ? 'Já Fui' : (visitedFilter === 'not_visited' ? 'Não Fui' : 'Visitados?')}</button>
+                                            <button onClick={() => setFavoriteFilter(prev => prev === 'all' ? 'favorites_only' : 'all')} className={`p-2 rounded-lg font-semibold transition-colors ${favoriteFilter === 'favorites_only' ? 'bg-pink-500 text-white' : 'bg-slate-200'}`}>Favoritos</button>
+                                        </div>
+                                         <div>
+                                            <label htmlFor="sort-by" className="text-sm font-medium text-slate-600 block mb-1">Ordenar por:</label>
+                                            <select id="sort-by" value={sortBy} onChange={e => setSortBy(e.target.value as any)} className="w-full p-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition text-slate-900">
+                                                <option value="name">Nome (A-Z)</option>
+                                                <option value="rating_our">Nossa Avaliação</option>
+                                                <option value="rating_google">Avaliação do Google</option>
+                                                <option value="price_asc">Preço (menor)</option>
+                                                <option value="price_desc">Preço (maior)</option>
+                                                <option value="recent">Mais Recentes</option>
+                                                <option value="distance" disabled={proximityFilter === 'all'}>Distância</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {viewMode === 'list' ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                                {filteredAndSortedRestaurants.map(restaurant => (
+                                    <RestaurantCard 
+                                        key={restaurant.id}
+                                        restaurant={restaurant}
+                                        onSelect={(r) => setModalContent(r)}
+                                        onToggleFavorite={handleToggleFavorite}
+                                        onRemoveFromList={handleRemoveFromList}
+                                        currentUser={currentUser.name as User}
+                                        distance={(restaurant as any).distance}
+                                    />
+                                ))}
+                            </div>
+                        ) : (
+                            <AchievementsMap 
+                                restaurants={filteredAndSortedRestaurants} 
+                                onSelectRestaurant={(r) => setModalContent(r)}
+                            />
+                        )}
+
+                        {filteredAndSortedRestaurants.length === 0 && <div className="text-center p-8"><p>Nenhum restaurante encontrado com esses filtros.</p></div>}
+                    </>
+                ) : (
+                    <EmptyState 
+                        onImportClick={() => setModalContent('import')} 
+                        onAddClick={() => setModalContent('add')} 
+                        hasCuratedLists={hasCuratedLists} 
+                    />
+                )}
+            </div>
+
+            {/* Modals */}
+             <Modal
+                isOpen={!!modalContent || !!editingRestaurant}
+                onClose={() => { setModalContent(null); setEditingRestaurant(null); }}
+                title={
+                    modalContent === 'add' ? 'Adicionar Restaurante' :
+                    modalContent === 'import' ? 'Importar Lista Curada' :
+                    editingRestaurant ? 'Editar Restaurante' :
+                    (modalContent as CoupleRestaurant)?.name || ''
+                }
+            >
+                 {modalContent === 'add' && <RestaurantForm onSave={(data) => handleSaveRestaurant(data)} onClose={() => setModalContent(null)} currentCity={currentCity} />}
+                 {editingRestaurant && <RestaurantForm onSave={(data) => handleSaveRestaurant(data, editingRestaurant.id)} onClose={() => setEditingRestaurant(null)} initialData={editingRestaurant} currentCity={currentCity} />}
+                 {typeof modalContent === 'object' && modalContent !== null && 'id' in modalContent && (
+                    <RestaurantDetail
+                        restaurant={modalContent as CoupleRestaurant}
+                        currentUser={currentUser}
+                        onUpdateReview={handleUpdateReview}
+                        onUpdatePriceRange={handleUpdatePriceRange}
+                        onUpdateGoogleRating={handleUpdateGoogleRating}
+                        onUpdateMemories={handleUpdateMemories}
+                        onUpdatePromotions={handleUpdatePromotions}
+                        onSaveDatePlan={handleSaveDatePlan}
+                        onEdit={handleOpenEditModal}
+                        onRemoveFromList={handleRemoveFromList}
+                        onToggleFavorite={handleToggleFavorite}
+                        onUpdateLocation={handleUpdateLocation}
+                    />
+                 )}
+                 {modalContent === 'import' && (
+                    <div className="space-y-4">
+                        {curatedLists.map(list => (
+                            <div key={list.id} className="p-4 bg-slate-50 rounded-lg flex justify-between items-center">
+                                <div>
+                                    <p className="font-bold text-dark">{list.icon} {list.name}</p>
+                                    <p className="text-sm text-slate-600">{list.description}</p>
+                                    <p className="text-xs text-slate-400 mt-1">{list.restaurant_ids.length} restaurantes</p>
+                                </div>
+                                <Button onClick={() => handleImportList(list)} disabled={isImporting}>
+                                    Importar
+                                </Button>
+                            </div>
+                        ))}
+                    </div>
+                 )}
+            </Modal>
+            
+            <Modal isOpen={isDiscoveryOpen} onClose={() => setIsDiscoveryOpen(false)} title="">
+                <RestaurantDiscovery 
+                    restaurants={discoverySnapshot} 
+                    onClose={() => setIsDiscoveryOpen(false)} 
+                    onInterest={(id) => handleSetFavoriteState(id, true)}
+                    onDislike={(id) => handleSetFavoriteState(id, false)}
+                    currentUser={currentUser.name as User}
+                />
+            </Modal>
+
+            {isAddressModalOpen && (
+                 <Modal isOpen={true} onClose={() => {}} title="">
+                    <AddressSetupModal 
+                        onSave={handleSaveAddress}
+                        onSkip={() => setIsAddressModalOpen(false)}
+                    />
+                </Modal>
+            )}
+
+             <Modal isOpen={isRouletteOpen} onClose={() => setIsRouletteOpen(false)} title="">
+                <DateRoulette 
+                    restaurants={coupleRestaurants}
+                    currentUser={currentUser.name as User}
+                    onClose={() => setIsRouletteOpen(false)}
+                    onSelectRestaurant={(r) => setModalContent(r)}
+                    onToggleFavorite={handleToggleFavorite}
+                    onRemoveFromList={handleRemoveFromList}
+                />
+            </Modal>
+
+            {/* Floating Action Buttons */}
+            {hasItemsOnList && (
+                <div className="fixed bottom-24 right-4 sm:bottom-6 sm:right-6 z-50 flex flex-col gap-3">
+                     <Button onClick={() => setIsRouletteOpen(true)} variant="accent" className="!rounded-full !p-4 shadow-lg">
+                        <TicketIcon className="w-7 h-7" />
+                        <span className="sr-only">Roleta do Date</span>
+                    </Button>
+                    <Button onClick={handleOpenDiscovery} variant="primary" className="!rounded-full !p-4 shadow-lg">
+                        <SparklesIcon className="w-7 h-7" />
+                        <span className="sr-only">Modo Descoberta</span>
+                    </Button>
+                    <Button onClick={() => setModalContent('add')} variant="primary" className="!rounded-full !p-4 shadow-lg">
+                        <PlusIcon className="w-7 h-7" />
+                        <span className="sr-only">Adicionar Restaurante</span>
+                    </Button>
+                </div>
+            )}
+        </>
+    );
+};
+
+export default RestaurantsApp;

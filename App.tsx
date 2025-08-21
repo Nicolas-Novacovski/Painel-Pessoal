@@ -3,7 +3,7 @@ import { useLocalStorage } from './hooks/useLocalStorage';
 import { View, UserProfile, User, Role } from './types';
 import { supabase } from './utils/supabase';
 
-import { RestaurantsApp } from './components/RestaurantsApp';
+import RestaurantsApp from './components/RestaurantsApp';
 import { ExpensesApp } from './components/ExpensesApp';
 import RecipesApp from './components/RecipesApp';
 import RemindersApp from './components/RemindersApp';

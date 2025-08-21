@@ -1,5 +1,3 @@
-/// <reference types="vite/client" />
-
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { UserProfile, AIRecommendation, AIRecommenderHistoryItem } from '../types';
 import { Button, PriceRatingDisplay, StarRatingDisplay } from './UIComponents';
