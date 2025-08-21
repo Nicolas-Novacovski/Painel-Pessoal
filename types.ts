@@ -49,6 +49,7 @@ export interface Restaurant {
   name: string;
   category: RestaurantCategory;
   cuisine: string | null;
+  city: string; // New field for multi-city support
   locations: Location[];
   image: string | null; // Now a data URL
   wants_to_go: User[];
@@ -109,6 +110,23 @@ export interface Recipe {
     instructions: string;
     added_by: User;
 }
+
+// --- New: Drinks ---
+export type DrinkCategory = 'Batido' | 'Mexido' | 'Montado' | 'Outro';
+
+export interface Drink {
+    id: string;
+    name: string;
+    category: DrinkCategory;
+    glass: string;
+    garnish: string | null;
+    image_url: string | null;
+    ingredients: Ingredient[];
+    instructions: string;
+    added_by: User;
+    created_at: string;
+}
+
 
 // --- Expenses ---
 export type PaymentSource = 'Conta Pessoal' | 'Cartão';

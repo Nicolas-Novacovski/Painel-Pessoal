@@ -20,15 +20,17 @@ interface RestaurantDetailProps {
     onEdit: (restaurant: Restaurant) => void;
     onRemoveFromList: (id: string) => Promise<void>;
     onToggleFavorite: (id: string, currentState: boolean) => Promise<void>;
+    onUpdateLocation: (restaurantId: string, location: Location) => Promise<void>;
 }
 
-export const RestaurantDetail: React.FC<RestaurantDetailProps> = ({ restaurant, currentUser, onUpdateReview, onUpdatePriceRange, onUpdateGoogleRating, onUpdateMemories, onUpdatePromotions, onSaveDatePlan, onEdit, onRemoveFromList, onToggleFavorite }) => {
+export const RestaurantDetail: React.FC<RestaurantDetailProps> = ({ restaurant, currentUser, onUpdateReview, onUpdatePriceRange, onUpdateGoogleRating, onUpdateMemories, onUpdatePromotions, onSaveDatePlan, onEdit, onRemoveFromList, onToggleFavorite, onUpdateLocation }) => {
     // Review State
     const [rating, setRating] = useState(0);
     const [comment, setComment] = useState('');
     const [isSavingReview, setIsSavingReview] = useState(false);
     const [selectedLocation, setSelectedLocation] = useState<Location | null>(restaurant.locations?.[0] || null);
     const [copyStatus, setCopyStatus] = useState<'idle' | 'copying' | 'copied'>('idle');
+    const [isGeocoding, setIsGeocoding] = useState<string | null>(null);
 
     // Google Rating State
     const [isEditingGoogleRating, setIsEditingGoogleRating] = useState(false);
@@ -376,6 +378,16 @@ Se nenhuma promoção ativa for encontrada, retorne APENAS a frase: "Nenhuma pro
         }
     }, [restaurant.id, restaurant.name, onUpdatePromotions]);
 
+    const handleRefreshLocation = async (location: Location) => {
+        if (!location.address) {
+            alert("O endereço está vazio e não pode ser geocodificado.");
+            return;
+        }
+        setIsGeocoding(location.address);
+        await onUpdateLocation(restaurant.id, location);
+        setIsGeocoding(null);
+    };
+
 
     const calculatedAverageRating = averageRating(restaurant.reviews);
     
@@ -429,14 +441,25 @@ Se nenhuma promoção ativa for encontrada, retorne APENAS a frase: "Nenhuma pro
                     <h4 className="font-bold text-lg text-slate-800">Endereços</h4>
                     <div className="flex flex-wrap gap-2">
                         {restaurant.locations?.map((loc, index) => (
-                            <button 
-                                key={index} 
-                                onClick={() => setSelectedLocation(loc)}
-                                className={`flex items-center gap-2 text-left p-2 rounded-lg transition-colors border-2 ${selectedLocation?.address === loc.address ? 'bg-primary/10 border-primary' : 'bg-slate-100 border-transparent hover:bg-slate-200'}`}
-                            >
-                                <MapPinIcon className={`w-5 h-5 flex-shrink-0 ${selectedLocation?.address === loc.address ? 'text-primary' : 'text-slate-500'}`} />
-                                <span className="text-sm font-medium text-slate-700">{loc.address}</span>
-                            </button>
+                            <div key={index} className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg group">
+                                <button 
+                                    onClick={() => setSelectedLocation(loc)}
+                                    className={`flex items-center gap-2 text-left px-2 py-1 rounded-md transition-colors w-full ${selectedLocation?.address === loc.address ? 'bg-primary/20' : 'hover:bg-slate-200'}`}
+                                >
+                                    <MapPinIcon className={`w-5 h-5 flex-shrink-0 ${selectedLocation?.address === loc.address ? 'text-primary' : 'text-slate-500'}`} />
+                                    <span className="text-sm font-medium text-slate-700">{loc.address}</span>
+                                </button>
+                                <Button
+                                    variant="ghost" 
+                                    size="sm"
+                                    className="!p-1.5"
+                                    onClick={() => handleRefreshLocation(loc)}
+                                    disabled={isGeocoding === loc.address}
+                                    title="Atualizar coordenadas do mapa para este endereço"
+                                >
+                                    <ArrowPathIcon className={`w-4 h-4 transition-colors text-slate-400 group-hover:text-primary ${isGeocoding === loc.address ? 'animate-spin' : ''}`} />
+                                </Button>
+                            </div>
                         ))}
                         {(!restaurant.locations || restaurant.locations.length === 0) && (
                             <p className="text-slate-500 text-sm">Nenhum endereço cadastrado.</p>

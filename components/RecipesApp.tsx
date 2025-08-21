@@ -1,17 +1,14 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '../utils/supabase';
-import { User, Recipe, RecipeCategory, Ingredient, NutritionalAnalysis } from '../types';
-import { RECIPE_CATEGORIES } from '../constants';
-import { Button, Input, Modal } from './UIComponents';
-import { PlusIcon, TrashIcon, XMarkIcon, CameraIcon, SparklesIcon, CheckIcon, PlayIcon, PencilIcon, ChevronDownIcon, BookOpenIcon, ChartBarIcon, MicrophoneIcon } from './Icons';
+import { User, Recipe, RecipeCategory, Ingredient, NutritionalAnalysis, Drink, DrinkCategory } from '../types';
+import { RECIPE_CATEGORIES, DRINK_CATEGORIES } from '../constants';
+import { Button, Input, Modal, SegmentedControl } from './UIComponents';
+import { PlusIcon, TrashIcon, XMarkIcon, CameraIcon, SparklesIcon, CheckIcon, PlayIcon, PencilIcon, ChevronDownIcon, BookOpenIcon, ChartBarIcon, MicrophoneIcon, MartiniGlassIcon } from './Icons';
 import { compressImage, slugify } from '../utils/helpers';
 import { GoogleGenAI, Type } from "@google/genai";
 import RecipeVoiceInputModal from './RecipeVoiceInputModal';
 
-
-interface RecipesAppProps {
-    currentUser: User;
-}
+// --- SUB-COMPONENTS FOR FOOD RECIPES (Existing Logic) ---
 
 const STORAGE_RLS_FIX_SQL = `
 -- Este script corrige as permissões do BUCKET de imagens 'recipe-images'.
@@ -48,7 +45,6 @@ FOR DELETE
 USING (bucket_id = 'recipe-images');
 `;
 
-// --- Cooking Mode View ---
 const CookingModeView: React.FC<{ recipe: Recipe; onClose: () => void }> = ({ recipe, onClose }) => {
     const [currentStep, setCurrentStep] = useState(0);
     const wakeLock = useRef<any>(null);
@@ -88,7 +84,6 @@ const CookingModeView: React.FC<{ recipe: Recipe; onClose: () => void }> = ({ re
 
     return (
         <div className="fixed inset-0 bg-black z-50 font-sans animate-fade-in">
-            {/* Background Image */}
             {recipe.image_url && (
                 <img 
                     src={recipe.image_url} 
@@ -117,7 +112,6 @@ const CookingModeView: React.FC<{ recipe: Recipe; onClose: () => void }> = ({ re
                     </div>
                 )}
                 
-                {/* Backdrop (Mobile only) */}
                 {showIngredients && (
                     <div 
                         className="lg:hidden fixed inset-0 bg-black/40 z-20"
@@ -125,7 +119,6 @@ const CookingModeView: React.FC<{ recipe: Recipe; onClose: () => void }> = ({ re
                     ></div>
                 )}
 
-                {/* Ingredients Panel */}
                 <aside className={`
                     fixed inset-y-0 left-0 z-30 w-full max-w-md
                     bg-black/50 backdrop-blur-lg p-8 overflow-y-auto
@@ -155,7 +148,6 @@ const CookingModeView: React.FC<{ recipe: Recipe; onClose: () => void }> = ({ re
                     </div>
                 </aside>
 
-                {/* Main Instructions Panel */}
                 <main className="flex-grow flex flex-col p-8 lg:p-16 h-full">
                     <div className="flex-grow flex items-center justify-center overflow-hidden">
                         <p key={currentStep} className="text-4xl md:text-5xl lg:text-6xl font-serif text-center text-white leading-snug drop-shadow-lg animate-fade-in">
@@ -203,8 +195,6 @@ const CookingModeView: React.FC<{ recipe: Recipe; onClose: () => void }> = ({ re
     );
 };
 
-
-// --- RecipeView Component ---
 const RecipeView: React.FC<{
     recipe: Recipe;
     onEdit: (recipe: Recipe) => void;
@@ -213,7 +203,7 @@ const RecipeView: React.FC<{
     onAnalyze: (recipe: Recipe) => void;
 }> = ({ recipe, onEdit, onDelete, onStartCooking, onAnalyze }) => {
     return (
-        <div className="bg-white p-6 md:p-10 rounded-xl shadow-lg overflow-y-auto" style={{maxHeight: 'calc(100vh - 140px)'}}>
+        <div className="bg-white p-6 md:p-10 rounded-xl shadow-lg overflow-y-auto" style={{maxHeight: 'calc(100vh - 220px)'}}>
             {recipe.image_url && (
                 <div className="mb-6 rounded-lg overflow-hidden h-64 w-full bg-slate-200">
                     <img 
@@ -279,7 +269,6 @@ const RecipeView: React.FC<{
     );
 };
 
-// --- Recipe Import Modal ---
 const RecipeImportModal: React.FC<{
     onClose: () => void;
     onImportSuccess: (data: Partial<Recipe>) => void;
@@ -482,384 +471,6 @@ const NutritionalAnalysisView: React.FC<{
     );
 };
 
-
-const RecipesApp: React.FC<RecipesAppProps> = ({ currentUser }) => {
-    const [recipes, setRecipes] = useState<Recipe[]>([]);
-    const [isFormModalOpen, setIsFormModalOpen] = useState(false);
-    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-    const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
-    const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null);
-    const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
-    const [saveError, setSaveError] = useState<string | null>(null);
-    const [cookingRecipe, setCookingRecipe] = useState<Recipe | null>(null);
-    const [isMobileListOpen, setIsMobileListOpen] = useState(false);
-
-    // --- Analysis State ---
-    const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
-    const [analyzingRecipe, setAnalyzingRecipe] = useState<Recipe | null>(null);
-    const [analysisResult, setAnalysisResult] = useState<NutritionalAnalysis | null>(null);
-    const [isAnalyzing, setIsAnalyzing] = useState(false);
-    const [analysisError, setAnalysisError] = useState<string | null>(null);
-
-    const fetchRecipes = useCallback(async () => {
-        const { data, error } = await supabase
-            .from('recipes')
-            .select('*')
-            .order('name', { ascending: true });
-
-        if (error) {
-            console.error("Error fetching recipes:", error);
-        } else {
-            setRecipes((data as any[]) || []);
-        }
-    }, []);
-
-    useEffect(() => {
-        fetchRecipes();
-    }, [fetchRecipes]);
-    
-    useEffect(() => {
-        if (!selectedRecipe && recipes.length > 0) {
-            setSelectedRecipe(recipes[0]);
-        } else if (selectedRecipe && !recipes.find(r => r.id === selectedRecipe.id)) {
-            // if selected recipe was deleted, select the first one
-            setSelectedRecipe(recipes[0] || null);
-        }
-    }, [recipes, selectedRecipe]);
-
-    useEffect(() => {
-        const channel = supabase.channel('realtime-recipes')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'recipes' }, () => {
-                fetchRecipes();
-            })
-            .subscribe();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, [fetchRecipes]);
-    
-    const handleAnalyzeRecipe = useCallback(async (recipe: Recipe) => {
-        if (!recipe) return;
-        setIsAnalyzing(true);
-        setAnalysisResult(null);
-        setAnalysisError(null);
-
-        try {
-            const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
-            const ingredientsString = recipe.ingredients
-                .filter(ing => !ing.is_heading && ing.name)
-                .map(ing => `${ing.quantity || ''} ${ing.name}`.trim())
-                .join('\n');
-
-            if (!ingredientsString) {
-                throw new Error("A receita não tem ingredientes para analisar.");
-            }
-            
-            const schema = {
-                type: Type.OBJECT,
-                properties: {
-                    calories: { type: Type.NUMBER, description: "Total de calorias por porção (apenas o número)." },
-                    protein: { type: Type.STRING, description: "Total de proteínas por porção, com unidade (ex: '25g')." },
-                    carbs: { type: Type.STRING, description: "Total de carboidratos por porção, com unidade (ex: '40g')." },
-                    fat: { type: Type.STRING, description: "Total de gorduras por porção, com unidade (ex: '15g')." },
-                    sugar: { type: Type.STRING, description: "Total de açúcares por porção, com unidade (ex: '10g')." },
-                    sodium: { type: Type.STRING, description: "Total de sódio por porção, com unidade (ex: '500mg')." },
-                    summary: { type: Type.STRING, description: "Resumo curto e amigável em português sobre o perfil nutricional do prato." },
-                },
-                required: ["calories", "protein", "carbs", "fat", "summary"],
-            };
-
-            const prompt = `Analise a lista de ingredientes a seguir para a receita '${recipe.name}'. Os ingredientes são:\n${ingredientsString}\n\nForneça uma estimativa nutricional por porção. Retorne um objeto JSON no formato definido.`;
-            
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: prompt,
-                config: {
-                    responseMimeType: "application/json",
-                    responseSchema: schema,
-                },
-            });
-            
-            const jsonString = response.text.trim();
-            const parsedData = JSON.parse(jsonString) as NutritionalAnalysis;
-            setAnalysisResult(parsedData);
-
-        } catch (error) {
-            console.error("Error analyzing recipe:", error);
-            setAnalysisError("Não foi possível analisar a receita. Verifique se os ingredientes estão corretos e tente novamente.");
-        } finally {
-            setIsAnalyzing(false);
-        }
-    }, []);
-
-    const handleOpenAnalysis = (recipe: Recipe) => {
-        setAnalyzingRecipe(recipe);
-        setIsAnalysisModalOpen(true);
-        handleAnalyzeRecipe(recipe);
-    };
-
-    const handleCloseAnalysis = () => {
-        setIsAnalysisModalOpen(false);
-        setAnalyzingRecipe(null);
-        setAnalysisResult(null);
-        setAnalysisError(null);
-        setIsAnalyzing(false);
-    };
-
-
-    const handleOpenFormWithImportedData = (data: Partial<Recipe>) => {
-        setIsImportModalOpen(false);
-        setIsVoiceModalOpen(false);
-        setEditingRecipe(data as Recipe); // Treat as initial data, even without an ID
-        setIsFormModalOpen(true);
-    };
-
-    const handleSaveRecipe = async (recipeData: Omit<Recipe, 'id' | 'added_by'>, imageFile: File | null) => {
-        setSaveError(null);
-        let imageUrl = editingRecipe?.image_url || null;
-
-        try {
-            if (imageFile) {
-                if (editingRecipe?.image_url) {
-                    const oldImagePath = new URL(editingRecipe.image_url).pathname.split('/recipe-images/')[1];
-                    if (oldImagePath) {
-                        await supabase.storage.from('recipe-images').remove([oldImagePath]);
-                    }
-                }
-                
-                const fileExt = imageFile.name.split('.').pop();
-                const fileName = `${slugify(recipeData.name)}-${Date.now()}.${fileExt}`;
-                
-                const { data: uploadData, error: uploadError } = await supabase.storage
-                    .from('recipe-images')
-                    .upload(fileName, imageFile);
-
-                if (uploadError) {
-                    if (uploadError.message.includes('Bucket not found')) {
-                        alert("Erro de Configuração: O bucket 'recipe-images' não foi encontrado no Supabase Storage.\n\nPor favor, crie um bucket público chamado 'recipe-images' no seu painel do Supabase.");
-                        throw new Error("Bucket 'recipe-images' not found.");
-                    }
-                    throw uploadError;
-                }
-                
-                imageUrl = supabase.storage.from('recipe-images').getPublicUrl(uploadData.path).data.publicUrl;
-            }
-
-            const dataToSave = { ...recipeData, image_url: imageUrl };
-
-            if (editingRecipe?.id) { // This is a real edit
-                const { error, data: updatedData } = await supabase.from('recipes').update(dataToSave as any).eq('id', editingRecipe.id).select().single();
-                if (error) throw error;
-                if(updatedData) setSelectedRecipe(updatedData as any);
-            } else { // This is a new recipe (could be from import or from scratch)
-                const { error, data: insertedData } = await supabase.from('recipes').insert([{ ...dataToSave, added_by: currentUser }] as any).select().single();
-                if (error) throw error;
-                if(insertedData) setSelectedRecipe(insertedData as any);
-            }
-            
-            await fetchRecipes();
-            handleCloseModal();
-
-        } catch (error: any) {
-            console.error("Error saving recipe:", error);
-            setSaveError(error.message);
-        }
-    };
-    
-    const handleDeleteRecipe = async (recipe: Recipe) => {
-        if(window.confirm(`Tem certeza que deseja apagar a receita "${recipe.name}"?`)) {
-            try {
-                if (recipe.image_url) {
-                    const oldImagePath = new URL(recipe.image_url).pathname.split('/recipe-images/')[1];
-                    if (oldImagePath) {
-                        await supabase.storage.from('recipe-images').remove([oldImagePath]);
-                    }
-                }
-                
-                const { error } = await supabase.from('recipes').delete().eq('id', recipe.id);
-                if (error) throw error;
-                
-                if(selectedRecipe?.id === recipe.id) {
-                    setSelectedRecipe(null);
-                }
-                await fetchRecipes();
-                
-            } catch (error: any) {
-                 console.error("Error deleting recipe:", error);
-                 alert(`Erro ao apagar receita: ${error.message}`);
-            }
-        }
-    }
-    
-    const handleCloseModal = () => {
-        setIsFormModalOpen(false);
-        setEditingRecipe(null);
-        setSaveError(null);
-    }
-
-    return (
-        <>
-            <div className="container mx-auto p-4 sm:p-6">
-                {/* MOBILE DROPDOWN */}
-                <div className="md:hidden relative mb-4">
-                    <button
-                        onClick={() => setIsMobileListOpen(!isMobileListOpen)}
-                        className="w-full bg-white p-3 rounded-lg shadow-sm text-left flex justify-between items-center button-active-effect"
-                    >
-                        <span className="font-semibold text-slate-700 truncate">{selectedRecipe?.name || 'Selecione uma receita'}</span>
-                        <ChevronDownIcon className={`w-5 h-5 text-slate-500 transition-transform ${isMobileListOpen ? 'rotate-180' : ''}`} />
-                    </button>
-                    {isMobileListOpen && (
-                        <div className="absolute top-full left-0 right-0 bg-white border border-slate-200 shadow-lg rounded-lg mt-1 z-20 max-h-80 overflow-y-auto">
-                            <div className="p-2 space-y-1">
-                                {recipes.map(recipe => (
-                                    <button
-                                        key={recipe.id}
-                                        onClick={() => {
-                                            setSelectedRecipe(recipe);
-                                            setIsMobileListOpen(false);
-                                        }}
-                                        className={`w-full text-left p-3 rounded-md flex items-center gap-3 ${
-                                            selectedRecipe?.id === recipe.id
-                                                ? 'bg-primary/10 text-primary font-bold'
-                                                : 'hover:bg-slate-100'
-                                        }`}
-                                    >
-                                        <img
-                                            src={recipe.image_url || `https://picsum.photos/seed/${recipe.id}/80/80`}
-                                            alt={recipe.name}
-                                            className="w-8 h-8 object-cover rounded-md bg-slate-200 flex-shrink-0"
-                                        />
-                                        <span className="truncate">{recipe.name}</span>
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                <div className="flex flex-col md:flex-row gap-0 md:h-[calc(100vh-120px)]">
-                    {/* Left Panel: Recipe List */}
-                    <div className="hidden md:flex md:w-1/3 lg:w-1/4 flex-col bg-white rounded-l-xl shadow-subtle p-4 border-r border-slate-200">
-                         <div className="flex justify-between items-center mb-4">
-                            <h2 className="text-xl font-bold text-dark">Receitas</h2>
-                            <div className="flex gap-2">
-                                <Button onClick={() => setIsVoiceModalOpen(true)} size="sm" variant="secondary" title="Adicionar com Voz">
-                                    <MicrophoneIcon className="w-4 h-4" />
-                                </Button>
-                                <Button onClick={() => setIsImportModalOpen(true)} size="sm" variant="accent" title="Buscar com IA">
-                                   <SparklesIcon className="w-4 h-4" />
-                                </Button>
-                                <Button onClick={() => { setEditingRecipe(null); setIsFormModalOpen(true); }} size="sm" title="Adicionar Manualmente">
-                                    <PlusIcon className="w-4 h-4"/>
-                                </Button>
-                            </div>
-                        </div>
-                        <div className="flex-grow overflow-y-auto -mr-2 pr-2">
-                            <div className="space-y-1">
-                                {recipes.map(recipe => (
-                                    <button
-                                        key={recipe.id}
-                                        onClick={() => setSelectedRecipe(recipe)}
-                                        className={`w-full text-left p-2 rounded-lg transition-colors text-slate-700 font-medium flex items-center gap-3 ${
-                                            selectedRecipe?.id === recipe.id
-                                                ? 'bg-primary/10 text-primary'
-                                                : 'hover:bg-slate-100'
-                                        }`}
-                                    >
-                                        <img
-                                            src={recipe.image_url || `https://picsum.photos/seed/${recipe.id}/80/80`}
-                                            alt={recipe.name}
-                                            className="w-10 h-10 object-cover rounded-md bg-slate-200 flex-shrink-0"
-                                        />
-                                        <span className="truncate">{recipe.name}</span>
-                                    </button>
-                                ))}
-                            </div>
-                             {recipes.length === 0 && (
-                                <div className="text-center py-12 text-slate-500">
-                                    <p>Nenhuma receita encontrada.</p>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                    
-                    {/* Book Spine */}
-                    <div className="hidden md:block w-4 bg-slate-200" style={{background: 'linear-gradient(to right, rgba(0,0,0,0.1), rgba(0,0,0,0.01) 50%, rgba(0,0,0,0.1))'}}></div>
-
-                    {/* Right Panel: Recipe Detail */}
-                    <div className="flex-grow w-full md:w-2/3 lg:w-3/4 overflow-y-auto bg-white rounded-r-xl shadow-subtle">
-                        {selectedRecipe ? (
-                            <div key={selectedRecipe.id} className="animate-fade-in">
-                                <RecipeView 
-                                    recipe={selectedRecipe}
-                                    onEdit={(recipe) => { setEditingRecipe(recipe); setIsFormModalOpen(true); }}
-                                    onDelete={handleDeleteRecipe}
-                                    onStartCooking={setCookingRecipe}
-                                    onAnalyze={handleOpenAnalysis}
-                                />
-                            </div>
-                        ) : (
-                            <div className="flex items-center justify-center h-full">
-                                 <div className="text-center text-slate-500 p-4">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-16 w-16 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v11.494m-5.747-3.996l11.494 0M4.125 10.125h15.75M4.125 13.875h15.75M12 21.75c5.385 0 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25 2.25 6.615 2.25 12s4.365 9.75 9.75 9.75z" />
-                                    </svg>
-                                    <h3 className="mt-4 font-hand text-4xl text-slate-700">Seu Livro de Receitas</h3>
-                                    <p className="mt-1 text-sm text-slate-500">Selecione uma receita da lista para ver os detalhes aqui.</p>
-                                    {recipes.length === 0 && (
-                                        <div className="mt-6">
-                                            <Button onClick={() => { setEditingRecipe(null); setIsFormModalOpen(true); }}>
-                                                <PlusIcon className="w-5 h-5"/> Adicionar Primeira Receita
-                                            </Button>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </div>
-                
-                <Modal isOpen={isFormModalOpen} onClose={handleCloseModal} title={editingRecipe?.id ? "Editar Receita" : "Adicionar Receita"}>
-                    <RecipeForm 
-                        onSave={handleSaveRecipe}
-                        onClose={handleCloseModal}
-                        initialData={editingRecipe}
-                        saveError={saveError}
-                    />
-                </Modal>
-
-                <Modal isOpen={isImportModalOpen} onClose={() => setIsImportModalOpen(false)} title="Buscar Receita com IA">
-                    <RecipeImportModal 
-                        onClose={() => setIsImportModalOpen(false)}
-                        onImportSuccess={handleOpenFormWithImportedData}
-                    />
-                </Modal>
-
-                <Modal isOpen={isVoiceModalOpen} onClose={() => setIsVoiceModalOpen(false)} title="Adicionar Receita por Voz">
-                    <RecipeVoiceInputModal
-                        onClose={() => setIsVoiceModalOpen(false)}
-                        onImportSuccess={handleOpenFormWithImportedData}
-                    />
-                </Modal>
-
-                <Modal isOpen={isAnalysisModalOpen} onClose={handleCloseAnalysis} title={`Análise Nutricional: ${analyzingRecipe?.name || ''}`}>
-                    <NutritionalAnalysisView
-                        isAnalyzing={isAnalyzing}
-                        analysisResult={analysisResult}
-                        analysisError={analysisError}
-                    />
-                </Modal>
-            </div>
-            {cookingRecipe && (
-                <CookingModeView recipe={cookingRecipe} onClose={() => setCookingRecipe(null)} />
-            )}
-        </>
-    );
-};
-
-// --- Recipe Form ---
 const RecipeForm: React.FC<{
     onSave: (data: any, imageFile: File | null) => Promise<void>;
     onClose: () => void;
@@ -1191,5 +802,489 @@ const RecipeForm: React.FC<{
         </form>
     )
 }
+
+const FoodSection: React.FC<{ currentUser: User }> = ({ currentUser }) => {
+    const [recipes, setRecipes] = useState<Recipe[]>([]);
+    const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
+    const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null);
+    const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
+    const [saveError, setSaveError] = useState<string | null>(null);
+    const [cookingRecipe, setCookingRecipe] = useState<Recipe | null>(null);
+    const [isMobileListOpen, setIsMobileListOpen] = useState(false);
+    const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
+    const [analyzingRecipe, setAnalyzingRecipe] = useState<Recipe | null>(null);
+    const [analysisResult, setAnalysisResult] = useState<NutritionalAnalysis | null>(null);
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [analysisError, setAnalysisError] = useState<string | null>(null);
+
+    const fetchRecipes = useCallback(async () => {
+        const { data, error } = await supabase
+            .from('recipes')
+            .select('*')
+            .order('name', { ascending: true });
+
+        if (error) {
+            console.error("Error fetching recipes:", error);
+        } else {
+            setRecipes((data as any[]) || []);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchRecipes();
+    }, [fetchRecipes]);
+    
+    useEffect(() => {
+        if (!selectedRecipe && recipes.length > 0) {
+            setSelectedRecipe(recipes[0]);
+        } else if (selectedRecipe && !recipes.find(r => r.id === selectedRecipe.id)) {
+            setSelectedRecipe(recipes[0] || null);
+        }
+    }, [recipes, selectedRecipe]);
+
+    useEffect(() => {
+        const channel = supabase.channel('realtime-recipes')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'recipes' }, fetchRecipes)
+            .subscribe();
+        return () => { supabase.removeChannel(channel); };
+    }, [fetchRecipes]);
+    
+    const handleAnalyzeRecipe = useCallback(async (recipe: Recipe) => {
+        if (!recipe) return;
+        setIsAnalyzing(true);
+        setAnalysisResult(null);
+        setAnalysisError(null);
+        try {
+            const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
+            const ingredientsString = recipe.ingredients
+                .filter(ing => !ing.is_heading && ing.name)
+                .map(ing => `${ing.quantity || ''} ${ing.name}`.trim())
+                .join('\n');
+
+            if (!ingredientsString) throw new Error("A receita não tem ingredientes para analisar.");
+            
+            const schema = {
+                type: Type.OBJECT,
+                properties: {
+                    calories: { type: Type.NUMBER, description: "Total de calorias por porção (apenas o número)." },
+                    protein: { type: Type.STRING, description: "Total de proteínas por porção, com unidade (ex: '25g')." },
+                    carbs: { type: Type.STRING, description: "Total de carboidratos por porção, com unidade (ex: '40g')." },
+                    fat: { type: Type.STRING, description: "Total de gorduras por porção, com unidade (ex: '15g')." },
+                    sugar: { type: Type.STRING, description: "Total de açúcares por porção, com unidade (ex: '10g')." },
+                    sodium: { type: Type.STRING, description: "Total de sódio por porção, com unidade (ex: '500mg')." },
+                    summary: { type: Type.STRING, description: "Resumo curto e amigável em português sobre o perfil nutricional do prato." },
+                },
+                required: ["calories", "protein", "carbs", "fat", "summary"],
+            };
+            const prompt = `Analise a lista de ingredientes a seguir para a receita '${recipe.name}'. Os ingredientes são:\n${ingredientsString}\n\nForneça uma estimativa nutricional por porção. Retorne um objeto JSON no formato definido.`;
+            
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: prompt,
+                config: { responseMimeType: "application/json", responseSchema: schema },
+            });
+            
+            const parsedData = JSON.parse(response.text.trim()) as NutritionalAnalysis;
+            setAnalysisResult(parsedData);
+        } catch (error) {
+            console.error("Error analyzing recipe:", error);
+            setAnalysisError("Não foi possível analisar a receita. Verifique se os ingredientes estão corretos e tente novamente.");
+        } finally {
+            setIsAnalyzing(false);
+        }
+    }, []);
+
+    const handleOpenAnalysis = (recipe: Recipe) => {
+        setAnalyzingRecipe(recipe);
+        setIsAnalysisModalOpen(true);
+        handleAnalyzeRecipe(recipe);
+    };
+
+    const handleCloseAnalysis = () => {
+        setIsAnalysisModalOpen(false);
+        setAnalyzingRecipe(null);
+        setAnalysisResult(null);
+        setAnalysisError(null);
+        setIsAnalyzing(false);
+    };
+
+    const handleOpenFormWithImportedData = (data: Partial<Recipe>) => {
+        setIsImportModalOpen(false);
+        setIsVoiceModalOpen(false);
+        setEditingRecipe(data as Recipe);
+        setIsFormModalOpen(true);
+    };
+
+    const handleSaveRecipe = async (recipeData: Omit<Recipe, 'id' | 'added_by'>, imageFile: File | null) => {
+        setSaveError(null);
+        let imageUrl = editingRecipe?.image_url || recipeData.image_url || null;
+
+        try {
+            if (imageFile) {
+                if (editingRecipe?.image_url) {
+                    const oldImagePath = new URL(editingRecipe.image_url).pathname.split('/recipe-images/')[1];
+                    if (oldImagePath) {
+                        await supabase.storage.from('recipe-images').remove([oldImagePath]);
+                    }
+                }
+                
+                const fileExt = imageFile.name.split('.').pop();
+                const fileName = `${slugify(recipeData.name)}-${Date.now()}.${fileExt}`;
+                
+                const { data: uploadData, error: uploadError } = await supabase.storage
+                    .from('recipe-images')
+                    .upload(fileName, imageFile);
+
+                if (uploadError) {
+                    if (uploadError.message.includes('Bucket not found')) {
+                        alert("Erro de Configuração: O bucket 'recipe-images' não foi encontrado no Supabase Storage.\n\nPor favor, crie um bucket público chamado 'recipe-images' no seu painel do Supabase.");
+                        throw new Error("Bucket 'recipe-images' not found.");
+                    }
+                    throw uploadError;
+                }
+                
+                imageUrl = supabase.storage.from('recipe-images').getPublicUrl(uploadData.path).data.publicUrl;
+            }
+
+            const dataToSave = { ...recipeData, image_url: imageUrl };
+
+            if (editingRecipe?.id) {
+                const { data: updatedData } = await supabase.from('recipes').update(dataToSave as any).eq('id', editingRecipe.id).select().single();
+                if(updatedData) setSelectedRecipe(updatedData as any);
+            } else {
+                const { data: insertedData } = await supabase.from('recipes').insert([{ ...dataToSave, added_by: currentUser }] as any).select().single();
+                if(insertedData) setSelectedRecipe(insertedData as any);
+            }
+            
+            await fetchRecipes();
+            handleCloseModal();
+
+        } catch (error: any) {
+            console.error("Error saving recipe:", error);
+            setSaveError(error.message);
+        }
+    };
+    
+    const handleDeleteRecipe = async (recipe: Recipe) => {
+        if(window.confirm(`Tem certeza que deseja apagar a receita "${recipe.name}"?`)) {
+            try {
+                if (recipe.image_url) {
+                    const oldImagePath = new URL(recipe.image_url).pathname.split('/recipe-images/')[1];
+                    if (oldImagePath) {
+                        await supabase.storage.from('recipe-images').remove([oldImagePath]);
+                    }
+                }
+                await supabase.from('recipes').delete().eq('id', recipe.id);
+                if(selectedRecipe?.id === recipe.id) setSelectedRecipe(null);
+            } catch (error: any) {
+                 console.error("Error deleting recipe:", error);
+                 alert(`Erro ao apagar receita: ${error.message}`);
+            }
+        }
+    }
+    
+    const handleCloseModal = () => {
+        setIsFormModalOpen(false);
+        setEditingRecipe(null);
+        setSaveError(null);
+    }
+    
+    return (
+        <>
+            <div className="md:hidden relative mb-4">
+                <button
+                    onClick={() => setIsMobileListOpen(!isMobileListOpen)}
+                    className="w-full bg-white p-3 rounded-lg shadow-sm text-left flex justify-between items-center button-active-effect"
+                >
+                    <span className="font-semibold text-slate-700 truncate">{selectedRecipe?.name || 'Selecione uma receita'}</span>
+                    <ChevronDownIcon className={`w-5 h-5 text-slate-500 transition-transform ${isMobileListOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {isMobileListOpen && (
+                    <div className="absolute top-full left-0 right-0 bg-white border border-slate-200 shadow-lg rounded-lg mt-1 z-20 max-h-80 overflow-y-auto">
+                        <div className="p-2 space-y-1">
+                            {recipes.map(recipe => (
+                                <button
+                                    key={recipe.id}
+                                    onClick={() => { setSelectedRecipe(recipe); setIsMobileListOpen(false); }}
+                                    className={`w-full text-left p-3 rounded-md flex items-center gap-3 ${ selectedRecipe?.id === recipe.id ? 'bg-primary/10 text-primary font-bold' : 'hover:bg-slate-100' }`}
+                                >
+                                    <img src={recipe.image_url || `https://picsum.photos/seed/${recipe.id}/80/80`} alt={recipe.name} className="w-8 h-8 object-cover rounded-md bg-slate-200 flex-shrink-0" />
+                                    <span className="truncate">{recipe.name}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </div>
+            <div className="flex flex-col md:flex-row gap-0 md:h-[calc(100vh-220px)]">
+                <aside className="hidden md:flex md:w-1/3 lg:w-1/4 flex-col bg-white rounded-l-xl shadow-subtle p-4 border-r border-slate-200">
+                     <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-xl font-bold text-dark">Receitas</h2>
+                        <div className="flex gap-2">
+                            <Button onClick={() => setIsVoiceModalOpen(true)} size="sm" variant="secondary" title="Adicionar com Voz"><MicrophoneIcon className="w-4 h-4" /></Button>
+                            <Button onClick={() => setIsImportModalOpen(true)} size="sm" variant="accent" title="Buscar com IA"><SparklesIcon className="w-4 h-4" /></Button>
+                            <Button onClick={() => { setEditingRecipe(null); setIsFormModalOpen(true); }} size="sm" title="Adicionar Manualmente"><PlusIcon className="w-4 h-4"/></Button>
+                        </div>
+                    </div>
+                    <div className="flex-grow overflow-y-auto -mr-2 pr-2">
+                        <div className="space-y-1">
+                            {recipes.map(recipe => (
+                                <button key={recipe.id} onClick={() => setSelectedRecipe(recipe)} className={`w-full text-left p-2 rounded-lg transition-colors text-slate-700 font-medium flex items-center gap-3 ${ selectedRecipe?.id === recipe.id ? 'bg-primary/10 text-primary' : 'hover:bg-slate-100' }`}>
+                                    <img src={recipe.image_url || `https://picsum.photos/seed/${recipe.id}/80/80`} alt={recipe.name} className="w-10 h-10 object-cover rounded-md bg-slate-200 flex-shrink-0"/>
+                                    <span className="truncate">{recipe.name}</span>
+                                </button>
+                            ))}
+                        </div>
+                         {recipes.length === 0 && <div className="text-center py-12 text-slate-500"><p>Nenhuma receita encontrada.</p></div>}
+                    </div>
+                </aside>
+                <div className="hidden md:block w-4 bg-slate-200" style={{background: 'linear-gradient(to right, rgba(0,0,0,0.1), rgba(0,0,0,0.01) 50%, rgba(0,0,0,0.1))'}}></div>
+                <main className="flex-grow w-full md:w-2/3 lg:w-3/4 overflow-y-auto bg-white rounded-r-xl shadow-subtle">
+                    {selectedRecipe ? (
+                        <div key={selectedRecipe.id} className="animate-fade-in">
+                            <RecipeView recipe={selectedRecipe} onEdit={(recipe) => { setEditingRecipe(recipe); setIsFormModalOpen(true); }} onDelete={handleDeleteRecipe} onStartCooking={setCookingRecipe} onAnalyze={handleOpenAnalysis} />
+                        </div>
+                    ) : (
+                        <div className="flex items-center justify-center h-full">
+                             <div className="text-center text-slate-500 p-4">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-16 w-16 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v11.494m-5.747-3.996l11.494 0M4.125 10.125h15.75M4.125 13.875h15.75M12 21.75c5.385 0 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25 2.25 6.615 2.25 12s4.365 9.75 9.75 9.75z" /></svg>
+                                <h3 className="mt-4 font-hand text-4xl text-slate-700">Seu Livro de Receitas</h3>
+                                <p className="mt-1 text-sm text-slate-500">Selecione uma receita da lista para ver os detalhes aqui.</p>
+                                {recipes.length === 0 && (
+                                    <div className="mt-6"><Button onClick={() => { setEditingRecipe(null); setIsFormModalOpen(true); }}><PlusIcon className="w-5 h-5"/> Adicionar Primeira Receita</Button></div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </main>
+            </div>
+            
+            <Modal isOpen={isFormModalOpen} onClose={handleCloseModal} title={editingRecipe?.id ? "Editar Receita" : "Adicionar Receita"}><RecipeForm onSave={handleSaveRecipe} onClose={handleCloseModal} initialData={editingRecipe} saveError={saveError} /></Modal>
+            <Modal isOpen={isImportModalOpen} onClose={() => setIsImportModalOpen(false)} title="Buscar Receita com IA"><RecipeImportModal onClose={() => setIsImportModalOpen(false)} onImportSuccess={handleOpenFormWithImportedData}/></Modal>
+            <Modal isOpen={isVoiceModalOpen} onClose={() => setIsVoiceModalOpen(false)} title="Adicionar Receita por Voz"><RecipeVoiceInputModal onClose={() => setIsVoiceModalOpen(false)} onImportSuccess={handleOpenFormWithImportedData}/></Modal>
+            <Modal isOpen={isAnalysisModalOpen} onClose={handleCloseAnalysis} title={`Análise Nutricional: ${analyzingRecipe?.name || ''}`}><NutritionalAnalysisView isAnalyzing={isAnalyzing} analysisResult={analysisResult} analysisError={analysisError}/></Modal>
+            {cookingRecipe && <CookingModeView recipe={cookingRecipe} onClose={() => setCookingRecipe(null)} />}
+        </>
+    );
+};
+
+// --- SUB-COMPONENTS FOR DRINKS (New Logic) ---
+
+const DrinkView: React.FC<{ drink: Drink; onEdit: (drink: Drink) => void; onDelete: (drink: Drink) => void; }> = ({ drink, onEdit, onDelete }) => (
+    <div className="bg-white p-6 md:p-10 rounded-xl shadow-lg overflow-y-auto" style={{maxHeight: 'calc(100vh - 220px)'}}>
+        {drink.image_url && <div className="mb-6 rounded-lg overflow-hidden h-64 w-full bg-slate-200"><img src={drink.image_url} alt={drink.name} className="w-full h-full object-cover"/></div>}
+        <h1 className="font-hand text-5xl md:text-6xl text-slate-800 mb-2 break-words">{drink.name}</h1>
+        <div className="flex items-baseline gap-4 mb-8 text-slate-500 flex-wrap">
+            <span className="font-semibold text-primary bg-primary/10 px-3 py-1 rounded-full text-sm">{drink.category}</span>
+            <span className="font-semibold text-amber-600 bg-amber-100 px-3 py-1 rounded-full text-sm">Copo: {drink.glass}</span>
+            {drink.garnish && <span className="font-semibold text-green-600 bg-green-100 px-3 py-1 rounded-full text-sm">Guarnição: {drink.garnish}</span>}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-x-8 gap-y-6">
+            <div className="lg:col-span-1">
+                <h2 className="font-bold text-2xl text-slate-700 border-b-2 border-slate-200 pb-2 mb-4">Ingredientes</h2>
+                <div className="space-y-2 text-slate-600">{drink.ingredients?.map(ing => (ing.is_heading ? <h4 key={ing.id} className="font-bold text-slate-800 pt-3 text-lg">{ing.name}</h4> : <p key={ing.id} className="pl-2">{ing.quantity ? `${ing.quantity} de ${ing.name}` : ing.name}</p>))}</div>
+            </div>
+            <div className="lg:col-span-2">
+                <h2 className="font-bold text-2xl text-slate-700 border-b-2 border-slate-200 pb-2 mb-4">Modo de Preparo</h2>
+                <div className="space-y-4 text-slate-700 leading-relaxed">{drink.instructions?.split('\n').filter(line => line.trim() !== '').map((line, index) => <p key={index}>{line}</p>)}</div>
+            </div>
+        </div>
+        <div className="flex justify-end items-center pt-8 mt-8 border-t border-slate-200 flex-wrap gap-2">
+            <Button variant="danger" size="sm" onClick={() => onDelete(drink)}><TrashIcon className="w-4 h-4"/> Apagar</Button>
+            <Button variant="secondary" size="sm" onClick={() => onEdit(drink)}><PencilIcon className="w-4 h-4"/> Editar</Button>
+        </div>
+    </div>
+);
+
+const DrinkForm: React.FC<{ onSave: (data: any, imageFile: File | null) => Promise<void>; onClose: () => void; initialData: Drink | null; }> = ({ onSave, onClose, initialData }) => {
+    const [name, setName] = useState('');
+    const [category, setCategory] = useState<DrinkCategory>('Batido');
+    const [glass, setGlass] = useState('');
+    const [garnish, setGarnish] = useState('');
+    const [ingredients, setIngredients] = useState<Ingredient[]>([{id: crypto.randomUUID(), name: '', quantity: '', is_heading: false}]);
+    const [instructions, setInstructions] = useState('');
+    const [imageFile, setImageFile] = useState<File | null>(null);
+    const [imagePreview, setImagePreview] = useState<string|null>(null);
+    const [isSaving, setIsSaving] = useState(false);
+
+    useEffect(() => {
+        if(initialData) {
+            setName(initialData.name || ''); setCategory(initialData.category || 'Batido'); setGlass(initialData.glass || ''); setGarnish(initialData.garnish || '');
+            setIngredients(initialData.ingredients?.length > 0 ? initialData.ingredients.map(i => ({...i, is_heading: i.is_heading || false})) : [{id: crypto.randomUUID(), name: '', quantity: '', is_heading: false}]);
+            setInstructions(initialData.instructions || ''); setImagePreview(initialData.image_url || null); setImageFile(null);
+        } else {
+            setName(''); setCategory('Batido'); setGlass(''); setGarnish(''); setIngredients([{id: crypto.randomUUID(), name: '', quantity: '', is_heading: false}]);
+            setInstructions(''); setImagePreview(null); setImageFile(null);
+        }
+    }, [initialData]);
+
+    const handleIngredientChange = (id: string, field: 'name' | 'quantity', value: string) => setIngredients(p => p.map(i => i.id === id ? {...i, [field]: value} : i));
+    const addIngredient = () => setIngredients(p => [...p, {id: crypto.randomUUID(), name: '', quantity: '', is_heading: false}]);
+    const addHeading = () => setIngredients(p => [...p, {id: crypto.randomUUID(), name: '', quantity: '', is_heading: true}]);
+    const removeIngredient = (id: string) => setIngredients(p => p.filter(i => i.id !== id));
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            const compressedFile = await compressImage(file, 800);
+            setImageFile(compressedFile);
+            const reader = new FileReader();
+            reader.onloadend = () => setImagePreview(reader.result as string);
+            reader.readAsDataURL(compressedFile);
+        }
+    };
+    const handleRemoveImage = () => { setImageFile(null); setImagePreview(null); (document.getElementById('drink-image') as HTMLInputElement).value = ''; if (initialData) initialData.image_url = null; };
+    const handleSubmit = async (e: React.FormEvent) => { e.preventDefault(); setIsSaving(true); await onSave({ name, category, glass, garnish, ingredients: ingredients.filter(i => i.name.trim()), instructions }, imageFile); setIsSaving(false); };
+
+    return (
+        <form onSubmit={handleSubmit} className="space-y-4">
+            <Input type="text" placeholder="Nome do Drink" value={name} onChange={e => setName(e.target.value)} required autoFocus/>
+            <div className="grid grid-cols-2 gap-4">
+                <select value={category} onChange={e => setCategory(e.target.value as DrinkCategory)} className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-900">
+                    {DRINK_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <Input type="text" placeholder="Copo Ideal" value={glass} onChange={e => setGlass(e.target.value)} />
+            </div>
+            <Input type="text" placeholder="Guarnição (opcional)" value={garnish} onChange={e => setGarnish(e.target.value)} />
+            <div>
+                <label className="font-medium text-sm text-slate-700">Foto</label>
+                <input id="drink-image" type="file" accept="image/*" onChange={handleFileChange} className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20" />
+                {imagePreview && <div className="relative group mt-2"><img src={imagePreview} alt="Preview" className="mt-2 rounded-lg max-h-40 w-full object-cover"/><button type="button" onClick={handleRemoveImage} className="absolute top-2 right-2 bg-black/50 p-1.5 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"><XMarkIcon className="w-4 h-4"/></button></div>}
+            </div>
+            <div>
+                <h4 className="font-medium text-sm text-slate-700 mb-2">Ingredientes</h4>
+                <div className="space-y-2">{ingredients.map(ing => (<div key={ing.id} className="flex gap-2 items-center">{ing.is_heading ? <Input type="text" placeholder="Título da Seção" value={ing.name} onChange={e => handleIngredientChange(ing.id, 'name', e.target.value)} className="flex-grow font-semibold" /> : <><Input type="text" placeholder="Qtde" value={ing.quantity} onChange={e => handleIngredientChange(ing.id, 'quantity', e.target.value)} className="w-1/3"/><Input type="text" placeholder="Ingrediente" value={ing.name} onChange={e => handleIngredientChange(ing.id, 'name', e.target.value)} className="flex-grow"/></>}<Button type="button" variant="danger" size="sm" onClick={() => removeIngredient(ing.id)} disabled={ingredients.length <= 1}><TrashIcon className="w-4 h-4"/></Button></div>))}</div>
+                <div className="flex gap-2 mt-2"><Button type="button" variant="secondary" size="sm" onClick={addIngredient}><PlusIcon className="w-4 h-4"/> Ingrediente</Button><Button type="button" variant="secondary" size="sm" onClick={addHeading}><PlusIcon className="w-4 h-4"/> Título</Button></div>
+            </div>
+            <div>
+                <label className="font-medium text-sm text-slate-700">Modo de Preparo</label>
+                <textarea value={instructions} onChange={e => setInstructions(e.target.value)} rows={5} className="w-full p-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition"/>
+            </div>
+            <div className="flex justify-end gap-3 pt-4 border-t"><Button type="button" variant="secondary" onClick={onClose}>Cancelar</Button><Button type="submit" disabled={isSaving || !name}>{isSaving ? 'Salvando...' : 'Salvar Drink'}</Button></div>
+        </form>
+    );
+};
+
+const DrinkImportModal: React.FC<{ onClose: () => void; onImportSuccess: (data: Partial<Drink>) => void; }> = ({ onClose, onImportSuccess }) => {
+    const [queryInput, setQueryInput] = useState('');
+    const [isImporting, setIsImporting] = useState(false);
+    const [importError, setImportError] = useState<string | null>(null);
+
+    const handleSearchWithAI = async () => {
+        if (!queryInput) return; setIsImporting(true); setImportError(null);
+        try {
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const prompt = `Realize uma busca no Google pela receita do drink: "${queryInput}". Analise a receita e retorne APENAS UM OBJETO JSON VÁLIDO com as chaves: "name" (string), "category" (um de [${DRINK_CATEGORIES.map(c => `'${c}'`).join(', ')}]), "glass" (string), "garnish" (string, ou null), "image_url" (string, ou null), "ingredients" (array de objetos com "name", "quantity", "is_heading"), "instructions" (string com passos separados por "\\n"). A resposta deve ser toda em português brasileiro.`;
+            
+            const response = await ai.models.generateContent({ 
+                model: 'gemini-2.5-flash', 
+                contents: prompt, 
+                config: { tools: [{ googleSearch: {} }] } 
+            });
+
+            let jsonString = response.text.trim();
+            const jsonMatch = jsonString.match(/```json\s*([\s\S]*?)\s*```|({[\s\S]*})/);
+            if (!jsonMatch) throw new Error("A IA não retornou um JSON válido.");
+            const parsedData = JSON.parse(jsonMatch[1] || jsonMatch[2]);
+            onImportSuccess({
+                ...parsedData,
+                ingredients: Array.isArray(parsedData.ingredients) ? parsedData.ingredients.map((ing: any) => ({ ...ing, id: crypto.randomUUID(), is_heading: ing.is_heading || false })) : [],
+            });
+        } catch (error) { setImportError("Não foi possível buscar a receita. " + (error as Error).message); } finally { setIsImporting(false); }
+    };
+    return (
+        <div className="space-y-4">
+            <p className="text-sm text-slate-600">Digite o nome de um drink. A IA irá pesquisar e preencher os detalhes para você.</p>
+            <Input type="text" placeholder="Ex: Negroni, Margarita, Caipirinha" value={queryInput} onChange={(e) => setQueryInput(e.target.value)} disabled={isImporting} onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); handleSearchWithAI(); }}} autoFocus/>
+            {importError && <p className="text-sm text-red-600 bg-red-50 p-3 rounded-lg">{importError}</p>}
+            <div className="flex justify-end gap-3 pt-4 border-t">
+                <Button type="button" variant="secondary" onClick={onClose} disabled={isImporting}>Cancelar</Button>
+                <Button type="button" onClick={handleSearchWithAI} disabled={isImporting || !queryInput}><SparklesIcon className={`w-4 h-4 ${isImporting ? 'animate-spin': ''}`}/> {isImporting ? 'Buscando...' : 'Buscar com IA'}</Button>
+            </div>
+        </div>
+    );
+};
+
+const DrinksSection: React.FC<{ currentUser: User }> = ({ currentUser }) => {
+    const [drinks, setDrinks] = useState<Drink[]>([]);
+    const [selectedDrink, setSelectedDrink] = useState<Drink | null>(null);
+    const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+    const [editingDrink, setEditingDrink] = useState<Drink | null>(null);
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    
+    const fetchDrinks = useCallback(async () => {
+        const { data, error } = await supabase.from('drinks').select('*').order('name', { ascending: true });
+        if (error) console.error("Error fetching drinks:", error); else setDrinks((data as any[]) || []);
+    }, []);
+
+    useEffect(() => { fetchDrinks(); }, [fetchDrinks]);
+    useEffect(() => { if (!selectedDrink && drinks.length > 0) setSelectedDrink(drinks[0]); else if (selectedDrink && !drinks.find(d => d.id === selectedDrink.id)) setSelectedDrink(drinks[0] || null); }, [drinks, selectedDrink]);
+    useEffect(() => { const channel = supabase.channel('realtime-drinks').on('postgres_changes', { event: '*', schema: 'public', table: 'drinks' }, fetchDrinks).subscribe(); return () => { supabase.removeChannel(channel); }; }, [fetchDrinks]);
+
+    const handleOpenFormWithImportedData = (data: Partial<Drink>) => { setIsImportModalOpen(false); setEditingDrink(data as Drink); setIsFormModalOpen(true); };
+    const handleSaveDrink = async (drinkData: Omit<Drink, 'id' | 'added_by'|'created_at'>, imageFile: File | null) => {
+        let imageUrl = editingDrink?.image_url || (drinkData as Drink).image_url || null;
+        try {
+            if (imageFile) {
+                if (editingDrink?.image_url) { const oldPath = new URL(editingDrink.image_url).pathname.split('/recipe-images/')[1]; if (oldPath) await supabase.storage.from('recipe-images').remove([oldPath]); }
+                const fileName = `${slugify(drinkData.name)}-${Date.now()}.${imageFile.name.split('.').pop()}`;
+                const { data, error } = await supabase.storage.from('recipe-images').upload(fileName, imageFile);
+                if (error) throw error;
+                imageUrl = supabase.storage.from('recipe-images').getPublicUrl(data.path).data.publicUrl;
+            }
+            const dataToSave = { ...drinkData, image_url: imageUrl };
+            if (editingDrink?.id) {
+                const { data } = await supabase.from('drinks').update(dataToSave as any).eq('id', editingDrink.id).select().single();
+                if(data) setSelectedDrink(data as any);
+            } else {
+                const { data } = await supabase.from('drinks').insert([{ ...dataToSave, added_by: currentUser }] as any).select().single();
+                if(data) setSelectedDrink(data as any);
+            }
+            setIsFormModalOpen(false); setEditingDrink(null);
+        } catch (error) { console.error("Error saving drink:", error); alert("Erro ao salvar drink."); }
+    };
+    const handleDeleteDrink = async (drink: Drink) => { if (window.confirm(`Apagar "${drink.name}"?`)) { if (drink.image_url) { const oldPath = new URL(drink.image_url).pathname.split('/recipe-images/')[1]; if (oldPath) await supabase.storage.from('recipe-images').remove([oldPath]); } await supabase.from('drinks').delete().eq('id', drink.id); if(selectedDrink?.id === drink.id) setSelectedDrink(null); } };
+
+    return (
+        <>
+            <div className="flex flex-col md:flex-row gap-0 md:h-[calc(100vh-220px)]">
+                <aside className="md:w-1/3 lg:w-1/4 flex-col bg-white rounded-l-xl shadow-subtle p-4 border-r border-slate-200 hidden md:flex">
+                    <div className="flex justify-between items-center mb-4"><h2 className="text-xl font-bold text-dark">Drinks</h2><div className="flex gap-2"><Button onClick={() => setIsImportModalOpen(true)} size="sm" variant="accent" title="Buscar com IA"><SparklesIcon className="w-4 h-4"/></Button><Button onClick={() => { setEditingDrink(null); setIsFormModalOpen(true); }} size="sm" title="Adicionar Manualmente"><PlusIcon className="w-4 h-4"/></Button></div></div>
+                    <div className="flex-grow overflow-y-auto -mr-2 pr-2">
+                        <div className="space-y-1">{drinks.map(drink => <button key={drink.id} onClick={() => setSelectedDrink(drink)} className={`w-full text-left p-2 rounded-lg transition-colors text-slate-700 font-medium flex items-center gap-3 ${selectedDrink?.id === drink.id ? 'bg-primary/10 text-primary' : 'hover:bg-slate-100'}`}><img src={drink.image_url || `https://picsum.photos/seed/drink-${drink.id}/80/80`} alt={drink.name} className="w-10 h-10 object-cover rounded-md bg-slate-200 flex-shrink-0"/><span className="truncate">{drink.name}</span></button>)}</div>
+                        {drinks.length === 0 && <div className="text-center py-12 text-slate-500"><p>Nenhum drink na lista.</p></div>}
+                    </div>
+                </aside>
+                <div className="hidden md:block w-4 bg-slate-200" style={{background: 'linear-gradient(to right, rgba(0,0,0,0.1), rgba(0,0,0,0.01) 50%, rgba(0,0,0,0.1))'}}></div>
+                <main className="flex-grow w-full md:w-2/3 lg:w-3/4 overflow-y-auto bg-white rounded-r-xl shadow-subtle">
+                    {selectedDrink ? <div key={selectedDrink.id} className="animate-fade-in"><DrinkView drink={selectedDrink} onEdit={(d) => { setEditingDrink(d); setIsFormModalOpen(true); }} onDelete={handleDeleteDrink} /></div> : <div className="flex items-center justify-center h-full"><div className="text-center text-slate-500 p-4"><MartiniGlassIcon className="mx-auto h-16 w-16 text-slate-300"/><h3 className="mt-4 font-hand text-4xl text-slate-700">Seu Livro de Drinks</h3><p className="mt-1 text-sm text-slate-500">Selecione um drink ou adicione um novo.</p></div></div>}
+                </main>
+            </div>
+            <Modal isOpen={isFormModalOpen} onClose={() => { setIsFormModalOpen(false); setEditingDrink(null); }} title={editingDrink?.id ? "Editar Drink" : "Adicionar Drink"}><DrinkForm onSave={handleSaveDrink} onClose={() => { setIsFormModalOpen(false); setEditingDrink(null); }} initialData={editingDrink} /></Modal>
+            <Modal isOpen={isImportModalOpen} onClose={() => setIsImportModalOpen(false)} title="Buscar Drink com IA"><DrinkImportModal onClose={() => setIsImportModalOpen(false)} onImportSuccess={handleOpenFormWithImportedData}/></Modal>
+        </>
+    );
+};
+
+const RecipesApp: React.FC<{ currentUser: User }> = ({ currentUser }) => {
+    const [activeTab, setActiveTab] = useState<'food' | 'drinks'>('food');
+
+    return (
+        <div className="container mx-auto p-4 sm:p-6">
+            <div className="max-w-xs mx-auto mb-8">
+                <SegmentedControl
+                    value={activeTab}
+                    onChange={(value) => setActiveTab(value as 'food' | 'drinks')}
+                    options={[
+                        { label: 'Comida', value: 'food' },
+                        { label: 'Drinks', value: 'drinks' }
+                    ]}
+                />
+            </div>
+            {activeTab === 'food' ? <FoodSection currentUser={currentUser} /> : <DrinksSection currentUser={currentUser} />}
+        </div>
+    );
+};
 
 export default RecipesApp;

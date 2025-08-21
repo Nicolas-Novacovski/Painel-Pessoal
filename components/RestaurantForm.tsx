@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Restaurant, RestaurantCategory, Location } from '../types';
 import { RESTAURANT_CATEGORIES } from '../constants';
 import { Input, Button, PriceRatingInput } from './UIComponents';
-import { SparklesIcon, TrashIcon, PlusIcon, XMarkIcon, CameraIcon } from './Icons';
+import { SparklesIcon, TrashIcon, PlusIcon, XMarkIcon, CameraIcon, ArrowPathIcon } from './Icons';
 import { supabase } from '../utils/supabase';
 import { slugify, compressImage } from '../utils/helpers';
 import { GoogleGenAI, Type } from "@google/genai";
@@ -12,13 +12,15 @@ interface RestaurantFormProps {
     onSave: (restaurant: Omit<Restaurant, 'id' | 'wants_to_go' | 'reviews' | 'addedBy' | 'memories' | 'created_at'>) => Promise<void>;
     onClose: () => void;
     initialData?: Restaurant | null;
+    currentCity: string;
 }
 
-export const RestaurantForm: React.FC<RestaurantFormProps> = ({ onSave, onClose, initialData = null }) => {
+export const RestaurantForm: React.FC<RestaurantFormProps> = ({ onSave, onClose, initialData = null, currentCity }) => {
     const isEditMode = !!initialData;
     const [name, setName] = useState('');
     const [category, setCategory] = useState<RestaurantCategory>('Jantar');
     const [cuisine, setCuisine] = useState('');
+    const [city, setCity] = useState(currentCity);
     const [vibe, setVibe] = useState('');
     const [locations, setLocations] = useState<Location[]>([{ address: '', latitude: null, longitude: null }]);
     const [priceRange, setPriceRange] = useState(0);
@@ -36,7 +38,7 @@ export const RestaurantForm: React.FC<RestaurantFormProps> = ({ onSave, onClose,
 
     // Loading states
     const [isSaving, setIsSaving] = useState(false);
-    const [isAiFilling, setIsAiFilling] = useState(false);
+    const [aiFillStatus, setAiFillStatus] = useState<'idle' | 'filling' | 'retrying'>('idle');
     const [isGeneratingVibe, setIsGeneratingVibe] = useState(false);
     const [isCompressing, setIsCompressing] = useState(false);
 
@@ -45,6 +47,7 @@ export const RestaurantForm: React.FC<RestaurantFormProps> = ({ onSave, onClose,
             setName(initialData.name);
             setCategory(initialData.category);
             setCuisine(initialData.cuisine || '');
+            setCity(initialData.city || 'Curitiba');
             setVibe(initialData.vibe || '');
             setLocations(initialData.locations?.length > 0 ? initialData.locations : [{ address: '', latitude: null, longitude: null }]);
             setPriceRange(initialData.price_range || 0);
@@ -54,8 +57,10 @@ export const RestaurantForm: React.FC<RestaurantFormProps> = ({ onSave, onClose,
             setMenuUrl(initialData.menu_url || '');
             setGoogleRating(initialData.google_rating || null);
             setGoogleRatingCount(initialData.google_rating_count || null);
+        } else {
+            setCity(currentCity); // Set city from prop for new restaurants
         }
-    }, [initialData]);
+    }, [initialData, currentCity]);
 
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -126,7 +131,7 @@ export const RestaurantForm: React.FC<RestaurantFormProps> = ({ onSave, onClose,
                  if (loc.address && (loc.latitude === null || loc.longitude === null)) {
                     try {
                         const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
-                        const prompt = `Use Google Search to find the precise latitude and longitude for the address "${loc.address}, Curitiba, PR, Brazil". Return ONLY a valid JSON object with "latitude" and "longitude". Example: {"latitude": -25.4284, "longitude": -49.2733}. If you cannot find the address, return {"latitude": null, "longitude": null}.`;
+                        const prompt = `Your task is to find the precise latitude and longitude for a given address using Google Search. The address is: "${loc.address}". The context is the city of ${city}. Prioritize the full street name and number to avoid confusion with nearby streets. Return ONLY a valid JSON object with "latitude" and "longitude" as keys. Example of a perfect response: {"latitude": -25.4284, "longitude": -49.2733}. If you cannot determine the coordinates with high confidence, return {"latitude": null, "longitude": null}. Do not add any other text or markdown.`;
                         
                         const response = await ai.models.generateContent({
                             model: 'gemini-2.5-flash',
@@ -152,7 +157,7 @@ export const RestaurantForm: React.FC<RestaurantFormProps> = ({ onSave, onClose,
             }));
     
             const restaurantData: Omit<Restaurant, 'id' | 'wants_to_go' | 'reviews' | 'addedBy' | 'memories' | 'created_at'> = {
-                name, category, cuisine: cuisine || null, vibe: vibe || null, locations: geocodedLocations, image: imageUrl,
+                name, category, cuisine: cuisine || null, city, vibe: vibe || null, locations: geocodedLocations, image: imageUrl,
                 price_range: priceRange, inTourOqfc, menu_url: menu_url || null,
                 google_rating: googleRating, google_rating_count: googleRatingCount,
                 google_rating_source_uri: initialData?.google_rating_source_uri || null, google_rating_source_title: initialData?.google_rating_source_title || null,
@@ -171,76 +176,99 @@ export const RestaurantForm: React.FC<RestaurantFormProps> = ({ onSave, onClose,
     
    const handleAiFill = useCallback(async () => {
         if (!name) { alert('Por favor, insira o nome do restaurante primeiro.'); return; }
-        setIsAiFilling(true);
-        try {
-            const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
-            const prompt = `Sua tarefa é atuar como um assistente de pesquisa para preencher dados de um restaurante.
-Realize uma busca detalhada no Google pelo restaurante "${name}" em Curitiba, PR.
-Analise os resultados da busca, principalmente o painel de informações do Google (Google Knowledge Panel), para extrair os seguintes dados.
+        setAiFillStatus('filling');
+        
+        const maxRetries = 3;
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
+                const prompt = `Sua tarefa é atuar como um assistente de pesquisa para preencher dados de um restaurante.
+Realize uma busca detalhada no Google pelo restaurante "${name}". Se o nome não for específico de uma cidade, use "${city}" como contexto para a busca inicial. Analise os resultados para extrair os seguintes dados do local correto.
 
 Responda APENAS com o texto no formato CHAVE: VALOR, com cada par em uma nova linha. Não inclua texto explicativo antes ou depois. Se não encontrar uma informação, retorne "N/A" para texto ou "0" para números.
 
 CHAVES ESPERADAS:
-- CATEGORIA
+- CATEGORIA (Deve ser um dos seguintes valores exatos: ${RESTAURANT_CATEGORIES.join(', ')})
 - COZINHA
 - VIBE
 - PRECO (um número de 1 a 4)
 - ENDERECO
+- CIDADE (Extraia a cidade do endereço completo. Ex: Curitiba, Gramado, São Paulo)
 - NOTA_GOOGLE (apenas o número, ex: 4.7)
 - AVALIACOES_GOOGLE (apenas o número, ex: 350)
 - MENU_URL
 
 EXEMPLO DE RESPOSTA:
-CATEGORIA: Jantar
-COZINHA: Italiana
-VIBE: Familiar, Tradicional
+CATEGORIA: Café
+COZINHA: Cafeteria, Doces
+VIBE: Temático, Familiar
 PRECO: 3
-ENDERECO: Av. Sete de Setembro, 2775 - Rebouças, Curitiba - PR
-NOTA_GOOGLE: 4.7
-AVALIACOES_GOOGLE: 3250
-MENU_URL: https://www.exemplorestaurante.com.br/cardapio
+ENDERECO: Av. Borges de Medeiros, 2738 - Centro, Gramado - RS
+CIDADE: Gramado
+NOTA_GOOGLE: 4.6
+AVALIACOES_GOOGLE: 6833
+MENU_URL: https://www.instagram.com/casadavelhabruxa/
 `;
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: prompt,
-                config: { tools: [{googleSearch: {}}] }
-            });
-            
-            const resultText = response.text.trim();
-            const lines = resultText.split('\n');
-            const parsedData: Record<string, string> = {};
+                const response = await ai.models.generateContent({
+                    model: 'gemini-2.5-flash',
+                    contents: prompt,
+                    config: { tools: [{googleSearch: {}}] }
+                });
+                
+                const resultText = response.text.trim();
+                const lines = resultText.split('\n');
+                const parsedData: Record<string, string> = {};
 
-            lines.forEach(line => {
-                const separatorIndex = line.indexOf(':');
-                if (separatorIndex > 0) {
-                    const key = line.substring(0, separatorIndex).trim().toUpperCase().replace(/ /g, '_');
-                    const value = line.substring(separatorIndex + 1).trim();
-                    parsedData[key] = value;
+                lines.forEach(line => {
+                    const separatorIndex = line.indexOf(':');
+                    if (separatorIndex > 0) {
+                        const key = line.substring(0, separatorIndex).trim().toUpperCase().replace(/ /g, '_');
+                        const value = line.substring(separatorIndex + 1).trim();
+                        parsedData[key] = value;
+                    }
+                });
+                
+                if(parsedData.CIDADE && parsedData.CIDADE !== 'N/A') setCity(parsedData.CIDADE);
+
+                const aiCategory = parsedData.CATEGORIA;
+                if (aiCategory) {
+                    const matchedCategory = RESTAURANT_CATEGORIES.find(c => c.toLowerCase() === aiCategory.toLowerCase());
+                    if (matchedCategory) {
+                        setCategory(matchedCategory);
+                    }
                 }
-            });
+                if(parsedData.COZINHA && parsedData.COZINHA !== 'N/A') setCuisine(parsedData.COZINHA);
+                if(parsedData.VIBE && parsedData.VIBE !== 'N/A') setVibe(parsedData.VIBE);
+                if(parsedData.ENDERECO && parsedData.ENDERECO !== 'N/A') setLocations([{ address: parsedData.ENDERECO, latitude: null, longitude: null }]);
+                if(parsedData.MENU_URL && parsedData.MENU_URL !== 'N/A') setMenuUrl(parsedData.MENU_URL);
 
-            if(parsedData.CATEGORIA && RESTAURANT_CATEGORIES.includes(parsedData.CATEGORIA as RestaurantCategory)) setCategory(parsedData.CATEGORIA as RestaurantCategory);
-            if(parsedData.COZINHA && parsedData.COZINHA !== 'N/A') setCuisine(parsedData.COZINHA);
-            if(parsedData.VIBE && parsedData.VIBE !== 'N/A') setVibe(parsedData.VIBE);
-            if(parsedData.ENDERECO && parsedData.ENDERECO !== 'N/A') setLocations([{ address: parsedData.ENDERECO, latitude: null, longitude: null }]);
-            if(parsedData.MENU_URL && parsedData.MENU_URL !== 'N/A') setMenuUrl(parsedData.MENU_URL);
+                const googleRatingNum = parseFloat(parsedData.NOTA_GOOGLE);
+                if (!isNaN(googleRatingNum) && googleRatingNum > 0) setGoogleRating(googleRatingNum);
+                
+                const googleRatingCountNum = parseInt(parsedData.AVALIACOES_GOOGLE, 10);
+                if (!isNaN(googleRatingCountNum) && googleRatingCountNum > 0) setGoogleRatingCount(googleRatingCountNum);
 
-            const googleRatingNum = parseFloat(parsedData.NOTA_GOOGLE);
-            if (!isNaN(googleRatingNum) && googleRatingNum > 0) setGoogleRating(googleRatingNum);
-            
-            const googleRatingCountNum = parseInt(parsedData.AVALIACOES_GOOGLE, 10);
-            if (!isNaN(googleRatingCountNum) && googleRatingCountNum > 0) setGoogleRatingCount(googleRatingCountNum);
-
-            const priceRangeNum = parseInt(parsedData.PRECO, 10);
-            if (!isNaN(priceRangeNum) && priceRangeNum >= 1 && priceRangeNum <= 4) setPriceRange(priceRangeNum);
-
-
-        } catch (error) {
-            console.error("AI Fill Error:", error); alert(`Erro ao buscar informações com a IA: ${(error as Error).message}`);
-        } finally {
-            setIsAiFilling(false);
+                const priceRangeNum = parseInt(parsedData.PRECO, 10);
+                if (!isNaN(priceRangeNum) && priceRangeNum >= 1 && priceRangeNum <= 4) setPriceRange(priceRangeNum);
+                
+                setAiFillStatus('idle');
+                return; // Exit successfully
+            } catch (error) {
+                console.error(`AI Fill Error (Attempt ${attempt}):`, error);
+                const errorMessage = (error as Error).message || '';
+                const isOverloaded = errorMessage.toLowerCase().includes('overloaded') || errorMessage.includes('503') || errorMessage.includes('UNAVAILABLE');
+                
+                if (isOverloaded && attempt < maxRetries) {
+                    setAiFillStatus('retrying');
+                    await new Promise(resolve => setTimeout(resolve, 1000 * attempt)); // Wait 1s, then 2s
+                } else {
+                    alert(`Erro ao buscar informações com a IA: ${errorMessage}`);
+                    setAiFillStatus('idle');
+                    return; // Exit after final failure
+                }
+            }
         }
-    }, [name]);
+    }, [name, city]);
     
     const handleGenerateVibe = useCallback(async () => {
         if (!name && !cuisine) { alert("Forneça ao menos o nome ou a cozinha para gerar uma vibe."); return; }
@@ -256,7 +284,21 @@ MENU_URL: https://www.exemplorestaurante.com.br/cardapio
         }
     }, [name, cuisine]);
 
-    const isBusy = isSaving || isAiFilling || isGeneratingVibe || isCompressing;
+    const isBusy = isSaving || aiFillStatus !== 'idle' || isGeneratingVibe || isCompressing;
+
+    const getAiFillButtonContent = () => {
+        switch (aiFillStatus) {
+            case 'filling':
+                return { text: 'Buscando...', icon: <SparklesIcon className="w-5 h-5 animate-spin" /> };
+            case 'retrying':
+                return { text: 'Tentando...', icon: <ArrowPathIcon className="w-5 h-5 animate-spin" /> };
+            case 'idle':
+            default:
+                return { text: 'Preencher', icon: <SparklesIcon className="w-5 h-5" /> };
+        }
+    };
+
+    const { text: aiButtonText, icon: aiButtonIcon } = getAiFillButtonContent();
 
     return (
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -268,8 +310,8 @@ MENU_URL: https://www.exemplorestaurante.com.br/cardapio
                      <div className="flex gap-2">
                         <Input id="name-ai" type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Ex: Cantina da Nona" required className="flex-grow" />
                         <Button type="button" variant="accent" onClick={handleAiFill} disabled={isBusy || !name} title="Preencher com IA">
-                            <SparklesIcon className={`w-5 h-5 ${isAiFilling ? 'animate-spin' : ''}`} />
-                            <span>Preencher</span>
+                           {aiButtonIcon}
+                           <span>{aiButtonText}</span>
                         </Button>
                     </div>
                 </div>
@@ -294,6 +336,10 @@ MENU_URL: https://www.exemplorestaurante.com.br/cardapio
                     <div>
                         <label htmlFor="cuisine" className="block text-sm font-medium text-slate-700 mb-1">Tipo de Cozinha</label>
                         <Input id="cuisine" type="text" value={cuisine} onChange={e => setCuisine(e.target.value)} placeholder="Ex: Italiana, Japonesa" disabled={isBusy}/>
+                    </div>
+                     <div>
+                        <label htmlFor="city" className="block text-sm font-medium text-slate-700 mb-1">Cidade</label>
+                        <Input id="city" type="text" value={city} onChange={e => setCity(e.target.value)} placeholder="Ex: Curitiba" disabled={isBusy} required/>
                     </div>
                 </div>
             </div>

@@ -1,8 +1,9 @@
-import { User, RestaurantCategory, RecipeCategory, PaymentSource, ReminderColor, View } from './types';
+import { User, RestaurantCategory, RecipeCategory, PaymentSource, ReminderColor, View, DrinkCategory } from './types';
 
 export const USERS: User[] = ['Nicolas', 'Ana Beatriz Diva Linda', 'Visitante', 'Umara', 'Renato'];
 export const RESTAURANT_CATEGORIES: RestaurantCategory[] = ['Café', 'Jantar', 'Lanche', 'Bar', 'Outro'];
 export const RECIPE_CATEGORIES: RecipeCategory[] = ['Salgado', 'Doce'];
+export const DRINK_CATEGORIES: DrinkCategory[] = ['Batido', 'Mexido', 'Montado', 'Outro'];
 export const PAYMENT_SOURCES: PaymentSource[] = ['Conta Pessoal', 'Cartão'];
 export const REMINDER_COLORS: ReminderColor[] = ['yellow', 'pink', 'blue', 'green'];
 

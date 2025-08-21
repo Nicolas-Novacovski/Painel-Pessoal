@@ -161,7 +161,10 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = ({ restaurant, onSe
                     </div>
                     <div className="flex items-center mt-3 text-slate-600">
                         <MapPinIcon className="w-4 h-4 mr-1.5 flex-shrink-0" />
-                        <p className="text-sm truncate flex-grow">{primaryLocation}</p>
+                        <p className="text-sm truncate flex-grow">
+                            {primaryLocation}
+                            {restaurant.city !== 'Curitiba' && <span className="font-bold"> - {restaurant.city}</span>}
+                        </p>
                         {distance !== undefined && distance !== Infinity && (
                             <span className="text-sm font-bold text-primary flex-shrink-0 ml-2 whitespace-nowrap">
                                 ~{distance.toFixed(1)} km

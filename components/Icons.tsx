@@ -330,6 +330,12 @@ export const MapIcon: React.FC<IconProps> = ({ className, ...props }) => (
 
 export const TicketIcon: React.FC<IconProps> = ({ className, ...props }) => (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className} {...props}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-1.5h5.25m-5.25 0h3m-3 0h-1.5m3 0h.75M9 12l3 3m0 0l3-3m-3 3v-3.375M12 18.75v-3.375m6-11.25a2.25 2.25 0 0 1 2.25 2.25v10.5a2.25 2.25 0 0 1-2.25 2.25h-10.5a2.25 2.25 0 0 1-2.25-2.25V6.75a2.25 2.25 0 0 1 2.25-2.25h10.5Z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-1.5h5.25m-5.25 0h3m-3 0h-1.5m3 0h.75M9 12l3 3m0 0l3-3m-3 3v-3.375M12 18.75v-3.375m6-11.25a2.25 2.25 0 0 1 2.25 2.25v10.5a2.25 2.25 0 0 1-2.25-2.25h-10.5a2.25 2.25 0 0 1-2.25-2.25V6.75a2.25 2.25 0 0 1 2.25-2.25h10.5Z" />
+    </svg>
+);
+
+export const MartiniGlassIcon: React.FC<IconProps> = ({ className, ...props }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className} {...props}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 22V12M12 12L6 4H18L12 12ZM6 4H2M18 4H22" />
     </svg>
 );

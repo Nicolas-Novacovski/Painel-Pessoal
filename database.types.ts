@@ -9,6 +9,44 @@ export type Json =
 export interface Database {
   public: {
     Tables: {
+      drinks: {
+        Row: {
+          id: string;
+          created_at: string;
+          name: string;
+          category: string;
+          glass: string;
+          garnish: string | null;
+          image_url: string | null;
+          ingredients: Json | null;
+          instructions: string | null;
+          added_by: string | null;
+        };
+        Insert: {
+          id?: string;
+          created_at?: string;
+          name: string;
+          category: string;
+          glass: string;
+          garnish?: string | null;
+          image_url?: string | null;
+          ingredients?: Json | null;
+          instructions?: string | null;
+          added_by?: string | null;
+        };
+        Update: Partial<{
+          id?: string;
+          created_at?: string;
+          name?: string;
+          category?: string;
+          glass?: string;
+          garnish?: string | null;
+          image_url?: string | null;
+          ingredients?: Json | null;
+          instructions?: string | null;
+          added_by?: string | null;
+        }>;
+      };
       couple_restaurants: {
         Row: {
           couple_id: string;
@@ -160,6 +198,7 @@ export interface Database {
           name: string;
           category: string;
           cuisine: string | null;
+          city: string;
           locations: Json;
           image: string | null;
           wants_to_go: Json;
@@ -182,6 +221,7 @@ export interface Database {
           name: string;
           category: string;
           cuisine?: string | null;
+          city: string;
           locations?: Json;
           image?: string | null;
           wants_to_go?: Json;
@@ -204,6 +244,7 @@ export interface Database {
           name?: string;
           category?: string;
           cuisine?: string | null;
+          city?: string;
           locations?: Json;
           image?: string | null;
           wants_to_go?: Json;

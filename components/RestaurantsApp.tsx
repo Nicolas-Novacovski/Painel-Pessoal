@@ -1,7 +1,9 @@
+
+
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { Restaurant, Review, User, RestaurantCategory, Memory, DatePlan, UserProfile, CuratedList } from '../types';
+import { Restaurant, Review, User, RestaurantCategory, Memory, DatePlan, UserProfile, CuratedList, Location } from '../types';
 import { RESTAURANT_CATEGORIES, ADMIN_COUPLE_EMAILS, USERS } from '../constants';
-import { PlusIcon, SparklesIcon, ChevronDownIcon, BookmarkIcon, InformationCircleIcon, MapIcon, TicketIcon } from './Icons';
+import { PlusIcon, SparklesIcon, ChevronDownIcon, BookmarkIcon, InformationCircleIcon, MapIcon, TicketIcon, CheckIcon } from './Icons';
 import { Modal, Button, Input, SegmentedControl } from './UIComponents';
 import { RestaurantCard } from './RestaurantCard';
 import { RestaurantForm } from './RestaurantForm';
@@ -126,12 +128,26 @@ const EmptyState: React.FC<{ onImportClick: () => void; onAddClick: () => void; 
     </div>
 );
 
+const getCityImage = (city: string): string => {
+    const sanitizedCity = city.toLowerCase().trim();
+    switch (sanitizedCity) {
+        case 'curitiba':
+            return 'https://upload.wikimedia.org/wikipedia/commons/1/19/Jardim_Bot%C3%A2nico_Centro_Curitiba.jpg';
+        case 'gramado':
+            return 'https://www.segueviagem.com.br/wp-content/uploads/2021/05/Igreja-Matriz-Sao-Pedro-Gramado-Rio-Grande-do-Sul-shutterstock_1633168567.jpg';
+        default:
+            return 'https://images.unsplash.com/photo-1500835556837-99ac94a94552?q=80&w=400&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D'; // Generic travel
+    }
+};
+
 
 const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser, onProfileUpdate }) => {
     const [allRestaurants, setAllRestaurants] = useState<Restaurant[]>([]);
     const [coupleRestaurants, setCoupleRestaurants] = useState<CoupleRestaurant[]>([]);
     const [curatedLists, setCuratedLists] = useState<CuratedList[]>([]);
     const [coupleProfiles, setCoupleProfiles] = useState<UserProfile[]>([]);
+    
+    const [currentCity, setCurrentCity] = useState<string>('Curitiba');
 
     const [searchTerm, setSearchTerm] = useState('');
     const [categoryFilter, setCategoryFilter] = useState<'all' | RestaurantCategory>('all');
@@ -156,6 +172,7 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser, onProfileU
     const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
     const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
     const [isRouletteOpen, setIsRouletteOpen] = useState(false);
+    const [isCityAccordionOpen, setIsCityAccordionOpen] = useState(false);
 
     const fetchData = useCallback(async () => {
         if (!currentUser.couple_id) {
@@ -300,6 +317,9 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser, onProfileU
                     alert("O restaurante foi criado, mas houve um erro ao adicioná-lo à sua lista.");
                     return;
                 } else {
+                    if (newRestaurant.city && newRestaurant.city !== currentCity) {
+                        setCurrentCity(newRestaurant.city);
+                    }
                     setModalContent(null);
                 }
             }
@@ -307,7 +327,7 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser, onProfileU
         
         await fetchData();
 
-    }, [currentUser.name, currentUser.couple_id, fetchData]);
+    }, [currentUser.name, currentUser.couple_id, fetchData, currentCity]);
 
     const handleOpenEditModal = (restaurant: Restaurant) => {
         setModalContent(null);
@@ -411,6 +431,48 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser, onProfileU
             alert("Erro ao atualizar a avaliação do Google.");
         }
     }, []);
+
+    const handleUpdateLocation = useCallback(async (restaurantId: string, locationToUpdate: Location) => {
+        const restaurant = allRestaurants.find(r => r.id === restaurantId);
+        if (!restaurant) return;
+    
+        try {
+            const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
+            const prompt = `Your task is to find the precise latitude and longitude for a given address using Google Search. The address is: "${locationToUpdate.address}". The context is the city of Curitiba, PR, Brazil. Return ONLY a valid JSON object with "latitude" and "longitude" as keys. Example of a perfect response: {"latitude": -25.4284, "longitude": -49.2733}. If you cannot determine the coordinates with high confidence, return {"latitude": null, "longitude": null}. Do not add any other text or markdown.`;
+            
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: prompt,
+                config: {
+                    tools: [{ googleSearch: {} }]
+                }
+            });
+    
+            const responseText = response.text.trim();
+            const jsonMatch = responseText.match(/{[\s\S]*}/);
+            if (!jsonMatch) {
+                 throw new Error("Geocoding failed: No valid JSON object found in the AI response.");
+            }
+            
+            const result = JSON.parse(jsonMatch[0]);
+            const newCoords = { latitude: result.latitude || null, longitude: result.longitude || null };
+    
+            const updatedLocations = restaurant.locations.map(loc => 
+                loc.address === locationToUpdate.address ? { ...loc, ...newCoords } : loc
+            );
+    
+            const { error } = await supabase.from('restaurants').update({ locations: updatedLocations } as any).eq('id', restaurantId);
+            if (error) throw error;
+            
+            // Refetch to ensure all components are updated
+            await fetchData();
+            alert("Coordenadas atualizadas com sucesso!");
+    
+        } catch (error) {
+            console.error("Error re-geocoding location:", error);
+            alert(`Não foi possível atualizar as coordenadas: ${(error as Error).message}`);
+        }
+    }, [allRestaurants, fetchData]);
 
     const handleUpdateMemories = useCallback(async (restaurantId: string, newMemories: Memory[]) => {
         const { error } = await supabase.from('restaurants').update({ memories: newMemories } as any).eq('id', restaurantId);
@@ -535,6 +597,21 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser, onProfileU
         return options;
     }, [coupleProfiles]);
 
+    const citiesWithCount = useMemo(() => {
+        const cityMap = new Map<string, number>();
+        coupleRestaurants.forEach(r => {
+            const city = r.city || 'Curitiba';
+            cityMap.set(city, (cityMap.get(city) || 0) + 1);
+        });
+        const allCityNames = ['Curitiba', ...Array.from(cityMap.keys())];
+        const uniqueCityNames = Array.from(new Set(allCityNames));
+        
+        return uniqueCityNames.map(city => ({
+            name: city,
+            count: cityMap.get(city) || 0,
+        }));
+    }, [coupleRestaurants]);
+
     const uniqueCuisines = useMemo(() => {
         const cuisines = new Set<string>();
         coupleRestaurants.forEach(r => {
@@ -590,6 +667,8 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser, onProfileU
         // 2. Filter the restaurants based on all criteria
         return restaurantsWithDistance
             .filter(r => {
+                if ((r.city || 'Curitiba') !== currentCity) return false;
+                
                 const hasVisited = r.reviews.some(review => review.user === (currentUser.name as User) && review.rating > 0);
                 if (visitedFilter !== 'all' && (visitedFilter === 'visited' ? !hasVisited : hasVisited)) {
                     return false;
@@ -640,7 +719,7 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser, onProfileU
                         return a.name.localeCompare(b.name);
                 }
             });
-    }, [coupleRestaurants, currentUser.name, categoryFilter, cuisineFilter, searchTerm, tourFilter, priceFilters, visitedFilter, sortBy, neighborhoodFilter, proximityFilter, proximityRadius, coupleProfiles]);
+    }, [coupleRestaurants, currentUser.name, categoryFilter, cuisineFilter, searchTerm, tourFilter, priceFilters, visitedFilter, sortBy, neighborhoodFilter, proximityFilter, proximityRadius, coupleProfiles, currentCity]);
 
     if (isLoading) {
         return <div className="p-6 text-center text-slate-500">Carregando restaurantes...</div>;
@@ -670,7 +749,7 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser, onProfileU
                         <div className="bg-white p-4 rounded-xl shadow-subtle mb-6">
                             <div className="flex flex-col sm:flex-row gap-2">
                                 <Input 
-                                    placeholder="Buscar na sua lista..."
+                                    placeholder={`Buscar em ${currentCity}...`}
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                     className="flex-grow"
@@ -689,6 +768,56 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser, onProfileU
                                         <span>Importar</span>
                                     </Button>
                                 )}
+                            </div>
+                             <div className="mt-4 pt-4 border-t border-slate-100">
+                                <div className="border border-slate-200 rounded-xl overflow-hidden transition-shadow hover:shadow-md">
+                                    {/* Accordion Header */}
+                                    <button
+                                        onClick={() => setIsCityAccordionOpen(!isCityAccordionOpen)}
+                                        className="w-full flex items-center justify-between p-4 bg-white hover:bg-slate-50 transition-colors text-left"
+                                        aria-expanded={isCityAccordionOpen}
+                                        aria-controls="city-list"
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <MapIcon className="w-6 h-6 text-primary"/>
+                                            <div>
+                                                <span className="text-sm text-slate-500">Destino Atual</span>
+                                                <p className="font-bold text-lg text-dark">{currentCity}</p>
+                                            </div>
+                                        </div>
+                                        <ChevronDownIcon className={`w-5 h-5 text-slate-500 transition-transform duration-200 ${isCityAccordionOpen ? 'rotate-180' : ''}`} />
+                                    </button>
+                                    
+                                    {/* Accordion Body */}
+                                    {isCityAccordionOpen && (
+                                        <div id="city-list" className="bg-slate-50/70 p-2 border-t border-slate-200 animate-fade-in">
+                                            <div className="space-y-1">
+                                                {citiesWithCount
+                                                    .filter(cityInfo => cityInfo.name !== currentCity)
+                                                    .map(cityInfo => (
+                                                        <button
+                                                            key={cityInfo.name}
+                                                            onClick={() => {
+                                                                setCurrentCity(cityInfo.name);
+                                                                setIsCityAccordionOpen(false);
+                                                            }}
+                                                            className="w-full flex items-center gap-3 px-3 py-2 text-slate-700 hover:bg-slate-200/70 cursor-pointer rounded-lg transition-colors text-left"
+                                                        >
+                                                            <img src={getCityImage(cityInfo.name)} alt={cityInfo.name} className="w-8 h-8 rounded-md object-cover bg-slate-200"/>
+                                                            <div>
+                                                                <p className="font-semibold text-dark">{cityInfo.name}</p>
+                                                                <p className="text-xs text-slate-500">{cityInfo.count} {cityInfo.count === 1 ? 'restaurante' : 'restaurantes'}</p>
+                                                            </div>
+                                                        </button>
+                                                    ))
+                                                }
+                                                 {citiesWithCount.filter(cityInfo => cityInfo.name !== currentCity).length === 0 && (
+                                                    <p className="px-3 py-2 text-sm text-slate-500 text-center">Nenhuma outra cidade na sua lista.</p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                             <div className="mt-2">
                                 <button onClick={() => setFiltersOpen(!filtersOpen)} className="w-full flex justify-between items-center text-left font-semibold text-slate-700 p-2 rounded-lg hover:bg-slate-100">
@@ -831,10 +960,10 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser, onProfileU
             </Modal>
 
             <Modal isOpen={modalContent !== null && typeof modalContent === 'object'} onClose={() => setModalContent(null)} title={modalContent && typeof modalContent === 'object' ? modalContent.name : ''}>
-                {modalContent && typeof modalContent === 'object' && <RestaurantDetail restaurant={modalContent} currentUser={currentUser} onUpdateReview={handleUpdateReview} onUpdatePriceRange={handleUpdatePriceRange} onUpdateGoogleRating={handleUpdateGoogleRating} onUpdateMemories={handleUpdateMemories} onUpdatePromotions={handleUpdatePromotions} onSaveDatePlan={handleSaveDatePlan} onEdit={handleOpenEditModal} onRemoveFromList={handleRemoveFromList} onToggleFavorite={handleToggleFavorite} />}
+                {modalContent && typeof modalContent === 'object' && <RestaurantDetail restaurant={modalContent} currentUser={currentUser} onUpdateReview={handleUpdateReview} onUpdatePriceRange={handleUpdatePriceRange} onUpdateGoogleRating={handleUpdateGoogleRating} onUpdateMemories={handleUpdateMemories} onUpdatePromotions={handleUpdatePromotions} onSaveDatePlan={handleSaveDatePlan} onEdit={handleOpenEditModal} onRemoveFromList={handleRemoveFromList} onToggleFavorite={handleToggleFavorite} onUpdateLocation={handleUpdateLocation} />}
             </Modal>
             <Modal isOpen={modalContent === 'add'} onClose={() => setModalContent(null)} title="Adicionar Novo Restaurante">
-                <RestaurantForm onSave={(data) => handleSaveRestaurant(data)} onClose={() => setModalContent(null)} />
+                <RestaurantForm onSave={(data) => handleSaveRestaurant(data)} onClose={() => setModalContent(null)} currentCity={currentCity} />
             </Modal>
             <Modal isOpen={modalContent === 'import'} onClose={() => setModalContent(null)} title="Importar Lista de Restaurantes">
                  <div className="space-y-6">
@@ -876,7 +1005,7 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser, onProfileU
                 </div>
             </Modal>
             <Modal isOpen={editingRestaurant !== null} onClose={() => setEditingRestaurant(null)} title={`Editando: ${editingRestaurant?.name || ''}`}>
-                <RestaurantForm initialData={editingRestaurant} onSave={(data) => handleSaveRestaurant(data, editingRestaurant?.id)} onClose={() => setEditingRestaurant(null)} />
+                <RestaurantForm initialData={editingRestaurant} onSave={(data) => handleSaveRestaurant(data, editingRestaurant?.id)} onClose={() => setEditingRestaurant(null)} currentCity={editingRestaurant?.city || currentCity} />
             </Modal>
              <Modal isOpen={isRouletteOpen} onClose={() => setIsRouletteOpen(false)} title="">
                 <DateRoulette
