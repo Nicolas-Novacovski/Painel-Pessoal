@@ -1,11 +1,11 @@
 
+
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '../utils/supabase';
 import { User, Expense, PaymentSource, RecurringExpense, MonthlyClosing, Goal, AIAnalysis, BarChartData, UserProfile } from '../types';
 import { PAYMENT_SOURCES } from '../constants';
 import { Button, Input, Modal, SegmentedControl, CurrencyInput } from './UIComponents';
 import { PlusIcon, TrashIcon, CalendarIcon, PencilIcon, ArrowPathIcon, SparklesIcon, TargetIcon, CheckIcon, ChevronLeftIcon, ChevronRightIcon, HomeIcon, CreditCardIcon } from './Icons';
-import { GoogleGenAI, Type } from "@google/genai";
 import { Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -492,7 +492,7 @@ export const ExpensesApp: React.FC<ExpensesAppProps> = ({ currentUser, googleAut
                 if (response.status === 401) { onAuthError(); throw new Error("Sessão Google expirada."); }
                 if (!response.ok && response.status !== 410 && response.status !== 404) throw new Error(await response.text());
                 finalEventId = null;
-            } catch(err) { alert(`Erro ao apagar evento no Google Calendar: ${(err as Error).message}`); }
+            } catch(err) { alert(`Erro ao apagar evento no Google Calendar: ${(err as Error).message}`); return; }
         }
 
         const dataToSave = { ...restData, google_calendar_event_id: finalEventId, couple_id: currentUser.couple_id };

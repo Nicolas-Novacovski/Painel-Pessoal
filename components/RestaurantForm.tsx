@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { Restaurant, RestaurantCategory, Location } from '../types';
 import { RESTAURANT_CATEGORIES } from '../constants';
@@ -132,7 +130,7 @@ export const RestaurantForm: React.FC<RestaurantFormProps> = ({ onSave, onClose,
             const geocodedLocations = await Promise.all(locations.filter(l => l.address).map(async (loc) => {
                  if (loc.address && (loc.latitude === null || loc.longitude === null)) {
                     try {
-                        const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
+                        const ai = new GoogleGenAI({apiKey: import.meta.env.VITE_GEMINI_API_KEY});
                         const prompt = `Your task is to find the precise latitude and longitude for a given address using Google Search. The address is: "${loc.address}". The context is the city of ${city}. Prioritize the full street name and number to avoid confusion with nearby streets. Return ONLY a valid JSON object with "latitude" and "longitude" as keys. Example of a perfect response: {"latitude": -25.4284, "longitude": -49.2733}. If you cannot determine the coordinates with high confidence, return {"latitude": null, "longitude": null}. Do not add any other text or markdown.`;
                         
                         const response = await ai.models.generateContent({
@@ -183,7 +181,7 @@ export const RestaurantForm: React.FC<RestaurantFormProps> = ({ onSave, onClose,
         const maxRetries = 3;
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
-                const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
+                const ai = new GoogleGenAI({apiKey: import.meta.env.VITE_GEMINI_API_KEY});
                 const prompt = `Sua tarefa é atuar como um assistente de pesquisa para preencher dados de um restaurante.
 Realize uma busca detalhada no Google pelo restaurante "${name}". Se o nome não for específico de uma cidade, use "${city}" como contexto para a busca inicial. Analise os resultados para extrair os seguintes dados do local correto.
 
@@ -276,7 +274,7 @@ MENU_URL: https://www.instagram.com/casadavelhabruxa/
         if (!name && !cuisine) { alert("Forneça ao menos o nome ou a cozinha para gerar uma vibe."); return; }
         setIsGeneratingVibe(true);
         try {
-            const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
+            const ai = new GoogleGenAI({apiKey: import.meta.env.VITE_GEMINI_API_KEY});
             const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: `Para um restaurante chamado "${name}", cozinha "${cuisine}", gere 1 a 3 palavras-chave para a "vibe" do lugar. Retorne APENAS o texto.`});
             setVibe(response.text.trim().replace(/\"/g, ''));
         } catch(err) {

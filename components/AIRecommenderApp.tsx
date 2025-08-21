@@ -1,4 +1,4 @@
-
+/// <reference types="vite/client" />
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { UserProfile, AIRecommendation, AIRecommenderHistoryItem } from '../types';
@@ -120,7 +120,7 @@ const AIRecommenderApp: React.FC<AIRecommenderAppProps> = ({ currentUser }) => {
         const maxRetries = 2;
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
-                const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+                const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
 
                 const prompt = `
                     Você é um assistente gourmet especialista em Curitiba. Baseado nos desejos e restrições do usuário, sua tarefa é recomendar um único restaurante na cidade. Use a busca do Google para obter informações atualizadas.
@@ -176,7 +176,7 @@ const AIRecommenderApp: React.FC<AIRecommenderAppProps> = ({ currentUser }) => {
 
     const fetchSuggestions = useCallback(async (query: string) => {
         try {
-            const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
+            const ai = new GoogleGenAI({apiKey: import.meta.env.VITE_GEMINI_API_KEY});
             const prompt = `Baseado no que o usuário está digitando para uma busca de restaurante: "${query}", gere até 5 sugestões curtas para autocompletar. As sugestões podem ser tipos de culinária, pratos específicos ou características (ex: "comida de boteco", "ambiente romântico"). Retorne um objeto JSON com uma chave "suggestions" que contém um array de strings.`;
 
             const response = await ai.models.generateContent({

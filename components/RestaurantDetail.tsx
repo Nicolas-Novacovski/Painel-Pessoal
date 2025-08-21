@@ -1,5 +1,3 @@
-
-
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Restaurant, Review, User, Location, Memory, DatePlan, UserProfile } from '../types';
 import { averageRating, slugify, compressImage } from '../utils/helpers';
@@ -349,7 +347,7 @@ export const RestaurantDetail: React.FC<RestaurantDetailProps> = ({ restaurant, 
     const handleFetchPromotions = useCallback(async () => {
         setIsFetchingPromotions(true);
         try {
-            const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
+            const ai = new GoogleGenAI({apiKey: import.meta.env.VITE_GEMINI_API_KEY});
             const prompt = `
 Pesquise na internet por promoções, happy hour, ou descontos semanais para o restaurante "${restaurant.name}", localizado em Curitiba, PR.
 Priorize informações de fontes oficiais do restaurante ou de guias confiáveis.
@@ -457,377 +455,207 @@ Se nenhuma promoção ativa for encontrada, retorne APENAS a frase: "Nenhuma pro
                                     className="!p-1.5"
                                     onClick={() => handleRefreshLocation(loc)}
                                     disabled={isGeocoding === loc.address}
-                                    title="Atualizar coordenadas do mapa para este endereço"
+                                    title="Atualizar coordenadas (geocoding)"
                                 >
-                                    <ArrowPathIcon className={`w-4 h-4 transition-colors text-slate-400 group-hover:text-primary ${isGeocoding === loc.address ? 'animate-spin' : ''}`} />
+                                    <ArrowPathIcon className={`w-4 h-4 ${isGeocoding === loc.address ? 'animate-spin' : 'group-hover:text-primary'}`} />
                                 </Button>
                             </div>
                         ))}
-                        {(!restaurant.locations || restaurant.locations.length === 0) && (
-                            <p className="text-slate-500 text-sm">Nenhum endereço cadastrado.</p>
-                        )}
                     </div>
                 </div>
 
-                 <div className="pt-4 border-t">
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                         {restaurant.cuisine && <p className="text-md font-bold text-primary">{restaurant.cuisine}</p>}
-                        <p className="text-sm text-slate-500 font-medium bg-secondary inline-block px-2 py-1 rounded-full">{restaurant.category}</p>
-                        <div className="flex items-center gap-2" title="Editar faixa de preço">
-                           <PriceRatingInput 
-                                rating={restaurant.price_range || 0} 
-                                setRating={(newRating) => onUpdatePriceRange(restaurant.id, newRating === restaurant.price_range ? 0 : newRating)} 
-                            />
-                        </div>
-                        {restaurant.inTourOqfc && (
-                            <span className="text-sm font-bold text-accent-focus bg-amber-100 px-2.5 py-1 rounded-full inline-flex items-center gap-1.5">
-                                <StarIcon className="w-4 h-4" />
-                                Tour O Que Fazer
-                            </span>
-                        )}
-                        {hasMenu && (
-                             <a 
-                                href={restaurant.menu_url!} 
-                                target="_blank" 
-                                rel="noopener noreferrer" 
-                                className="inline-flex items-center gap-2 justify-center px-3 py-1.5 text-sm font-semibold rounded-lg text-slate-600 hover:bg-slate-200 hover:text-dark focus:ring-primary focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors duration-200"
-                            >
-                                Ver Cardápio
-                            </a>
-                        )}
-                    </div>
+                <div className="flex flex-col sm:flex-row gap-3">
+                    <Button onClick={handleNavigate} disabled={isNavDisabled} className="flex-1">
+                         <UberIcon className="w-5 h-5"/>
+                         {getUberButtonText()}
+                    </Button>
+                    <Button onClick={() => setIsDatePlannerOpen(true)} variant="accent" className="flex-1">
+                        <HeartIcon className="w-5 h-5"/>
+                        Propor um Date
+                    </Button>
+                     {hasMenu && <Button onClick={() => window.open(restaurant.menu_url!, '_blank')} variant="secondary" className="flex-1">Ver Cardápio</Button>}
                 </div>
                 
-                <div className="pt-4 border-t">
-                    <div className="flex items-center gap-3 group">
-                        <GoogleIcon className="w-5 h-5 text-slate-500" />
-                        {isEditingGoogleRating ? (
-                            <div className="flex items-center gap-2 animate-fade-in">
-                                <Input 
-                                    type="number" step="0.1" value={tempGoogleRating} 
-                                    onChange={e => setTempGoogleRating(e.target.value)}
-                                    placeholder="Nota (Ex: 4.5)" className="w-32" autoFocus
-                                />
-                                <Input 
-                                    type="number" value={tempGoogleRatingCount}
-                                    onChange={e => setTempGoogleRatingCount(e.target.value)}
-                                    placeholder="Qtd. (Ex: 350)" className="w-32"
-                                />
-                                <Button size="sm" variant="ghost" className="!p-2" onClick={handleSaveGoogleRating}><CheckIcon className="w-5 h-5 text-green-600"/></Button>
-                                <Button size="sm" variant="ghost" className="!p-2" onClick={handleCancelGoogleRating}><XMarkIcon className="w-5 h-5 text-red-600"/></Button>
-                            </div>
-                        ) : (
-                            <>
-                                {restaurant.google_rating != null ? (
-                                    <div className="flex items-center gap-1.5">
-                                        <StarIcon className="w-5 h-5 text-yellow-400" />
-                                        <span className="font-semibold text-lg text-slate-700">{restaurant.google_rating.toFixed(1)}</span>
-                                        <span className="text-sm text-slate-500">({restaurant.google_rating_count || 0} avaliações)</span>
-                                    </div>
-                                ) : (
-                                    <p className="text-slate-500">Nenhuma avaliação do Google cadastrada.</p>
-                                )}
-                                <Button variant="ghost" size="sm" className="!p-1.5 opacity-0 group-hover:opacity-100 transition-opacity" onClick={handleStartEditGoogleRating}>
-                                    <PencilIcon className="w-4 h-4"/>
-                                </Button>
-                            </>
-                        )}
-                    </div>
-                </div>
-
-                {/* Promotions Section */}
-                <div className="pt-4 border-t">
-                    <div 
-                        className="flex justify-between items-center cursor-pointer p-2 -m-2 rounded-lg hover:bg-slate-100 transition-colors"
-                        onClick={() => setIsPromotionsOpen(prev => !prev)}
-                        role="button"
-                        aria-expanded={isPromotionsOpen}
-                    >
-                        <h4 className="font-bold text-lg text-slate-800 flex items-center gap-2">
-                            <TagIcon className="w-6 h-6 text-green-600"/>
-                            Promoções da Semana
-                            {isFetchingPromotions && <ArrowPathIcon className="w-5 h-5 text-primary animate-spin" />}
-                        </h4>
-                        <ChevronDownIcon className={`w-6 h-6 text-slate-500 transition-transform duration-200 ${isPromotionsOpen ? 'rotate-180' : ''}`} />
-                    </div>
-
-                    {isPromotionsOpen && (
-                        <div className="mt-2 space-y-3 animate-fade-in">
-                            {restaurant.weekly_promotions && restaurant.weekly_promotions !== "Nenhuma promoção encontrada." ? (
-                                <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                                    <p className="text-green-800 whitespace-pre-wrap">{restaurant.weekly_promotions}</p>
+                <div className="p-4 bg-slate-100/70 rounded-lg border border-slate-200 space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div className="sm:col-span-1">
+                            <h4 className="font-bold text-dark mb-2">Nossa Avaliação ({calculatedAverageRating.toFixed(1)})</h4>
+                             <div className="space-y-2">
+                                <div className="p-2 bg-white/50 rounded">
+                                    <p className="font-semibold text-sm">{currentUser === 'Nicolas' ? 'Nicolas' : 'Ana'}</p>
+                                    <StarRatingDisplay rating={restaurant.reviews.find(r => r.user === currentUser.name)?.rating || 0} />
                                 </div>
-                            ) : restaurant.weekly_promotions === "Nenhuma promoção encontrada." ? (
-                                <p className="text-slate-500 text-sm">Nenhuma promoção encontrada pela IA na última busca.</p>
-                            ) : (
-                                <p className="text-slate-500 text-sm">Clique no botão para buscar promoções e descontos semanais com a IA.</p>
-                            )}
-
-                            <Button 
-                                variant="secondary" 
-                                size={!restaurant.weekly_promotions ? 'md' : 'sm'}
-                                onClick={(e) => {
-                                    e.stopPropagation(); // prevent accordion from closing
-                                    handleFetchPromotions();
-                                }} 
-                                disabled={isFetchingPromotions}
-                            >
-                                {isFetchingPromotions ? (
-                                    <>
-                                        <ArrowPathIcon className="w-5 h-5 animate-spin" />
-                                        <span>Buscando...</span>
-                                    </>
-                                ) : (
-                                    !restaurant.weekly_promotions ? (
-                                        <>
-                                            <SparklesIcon className="w-5 h-5" />
-                                            <span>Buscar Promoções com IA</span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <ArrowPathIcon className="w-4 h-4" />
-                                            <span>Buscar novamente</span>
-                                        </>
-                                    )
+                                {partnerReview && (
+                                     <div className="p-2 bg-white/50 rounded">
+                                        <p className="font-semibold text-sm">{partner === 'Nicolas' ? 'Nicolas' : 'Ana'}</p>
+                                        <StarRatingDisplay rating={partnerReview.rating} />
+                                    </div>
                                 )}
-                            </Button>
+                            </div>
                         </div>
-                    )}
-                </div>
-
-                <div className="pt-4 border-t">
-                    <div className="p-4 bg-green-100 border border-green-300 rounded-lg text-center animate-pop-in space-y-2">
-                        <p className="text-2xl">🎉</p>
-                        <p className="font-bold text-green-800">Este restaurante está na sua lista!</p>
-                        <p className="text-sm text-green-700">Que tal marcar um dia?</p>
-                            <Button variant="accent" size="sm" onClick={() => setIsDatePlannerOpen(true)}>
-                            Planejar um Date!
-                        </Button>
+                        <div className="sm:col-span-2">
+                             <h4 className="font-bold text-dark mb-2">Sua vez de avaliar!</h4>
+                             <StarRatingInput rating={rating} setRating={setRating} />
+                             <textarea value={comment} onChange={e => setComment(e.target.value)} rows={2} placeholder="Deixe um comentário..." className="mt-2 w-full p-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary"></textarea>
+                             <Button onClick={handleReviewSubmit} disabled={isSavingReview || rating === 0} size="sm" className="mt-2">
+                                 {isSavingReview ? 'Salvando...' : 'Salvar Avaliação'}
+                             </Button>
+                        </div>
+                    </div>
+                     <div className="pt-4 border-t grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                             <h4 className="font-bold text-dark mb-2 flex items-center gap-1.5"><TagIcon className="w-4 h-4"/> Preço</h4>
+                             <PriceRatingInput rating={restaurant.price_range || 0} setRating={(newPrice) => onUpdatePriceRange(restaurant.id, newPrice)} />
+                        </div>
+                        <div className="sm:col-span-2">
+                            <h4 className="font-bold text-dark mb-2 flex items-center gap-1.5"><GoogleIcon className="w-4 h-4"/> Google</h4>
+                            {isEditingGoogleRating ? (
+                                <div className="flex items-center gap-2">
+                                    <Input type="number" step="0.1" value={tempGoogleRating} onChange={e => setTempGoogleRating(e.target.value)} placeholder="Nota" className="w-24" />
+                                    <Input type="number" value={tempGoogleRatingCount} onChange={e => setTempGoogleRatingCount(e.target.value)} placeholder="Avaliações" className="w-28" />
+                                    <Button size="sm" onClick={handleSaveGoogleRating}><CheckIcon className="w-4 h-4"/></Button>
+                                    <Button size="sm" variant="secondary" onClick={handleCancelGoogleRating}><XMarkIcon className="w-4 h-4"/></Button>
+                                </div>
+                            ) : (
+                                <div className="flex items-center gap-2 group">
+                                    <StarRatingDisplay rating={restaurant.google_rating || 0} />
+                                    <span className="text-sm font-semibold">{restaurant.google_rating?.toFixed(1) || 'N/A'}</span>
+                                    <span className="text-xs text-slate-500">({restaurant.google_rating_count || 0})</span>
+                                    <Button variant="ghost" size="sm" className="!p-1 opacity-0 group-hover:opacity-100" onClick={handleStartEditGoogleRating}><PencilIcon className="w-4 h-4"/></Button>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
 
-                {/* --- Memories Album --- */}
-                <div className="pt-4 border-t">
+                {/* --- Memories --- */}
+                <div className="p-4 bg-slate-100/70 rounded-lg border border-slate-200">
                     <div className="flex justify-between items-center mb-4">
-                        <h4 className="font-bold text-lg text-slate-800 flex items-center gap-2">
-                            <CameraIcon className="w-6 h-6"/>
-                            Álbum Gastronômico
-                        </h4>
-                        <Button variant="secondary" size="sm" onClick={() => setIsMemoryModalOpen(true)}>
-                            <PlusIcon className="w-4 h-4"/> Adicionar
-                        </Button>
+                        <h4 className="font-bold text-lg text-dark">Nossas Memórias</h4>
+                        <Button onClick={() => setIsMemoryModalOpen(true)}><CameraIcon className="w-5 h-5" /> Adicionar</Button>
                     </div>
                     {memories.length > 0 ? (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                            {memories.map(memory => (
-                                <div 
-                                    key={memory.id} 
-                                    className="group relative rounded-lg overflow-hidden shadow-sm cursor-pointer aspect-square bg-slate-100"
-                                    onClick={() => setViewingMemory(memory)}
-                                >
-                                    {memory.type === 'video' ? (
-                                        <video src={memory.image_url} className="w-full h-full object-cover" muted loop playsInline />
-                                    ) : (
-                                        <img src={memory.image_url} alt={memory.caption} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"/>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                            {memories.sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map(memory => (
+                                <div key={memory.id} className="group relative aspect-square bg-slate-300 rounded-lg overflow-hidden cursor-pointer" onClick={() => setViewingMemory(memory)}>
+                                    <img src={memory.image_url} alt={memory.caption} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                                    {memory.type === 'video' && (
+                                        <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+                                            <PlayIcon className="w-10 h-10 text-white/80"/>
+                                        </div>
                                     )}
-                                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent p-2 flex flex-col justify-end">
-                                        {memory.type === 'video' && (
-                                            <div className="absolute inset-0 flex items-center justify-center">
-                                                <PlayIcon className="w-8 h-8 text-white/80 drop-shadow-lg" />
-                                            </div>
-                                        )}
-                                        <p className="text-white text-xs font-semibold leading-tight">{memory.caption}</p>
-                                        <p className="text-slate-300 text-xs">{memory.created_by_user} - {new Date(memory.created_at).toLocaleDateString()}</p>
+                                     <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/70 to-transparent">
+                                        <p className="text-white text-xs font-semibold truncate">{memory.caption}</p>
+                                        <p className="text-white/80 text-xs">{new Date(memory.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
                                     </div>
-                                    {memory.created_by_user === currentUser.name && (
-                                        <button 
-                                            onClick={(e) => { e.stopPropagation(); handleDeleteMemory(memory); }}
-                                            className="absolute top-1 right-1 z-10 bg-black/50 p-1.5 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
-                                        >
-                                            <TrashIcon className="w-4 h-4"/>
+                                    {memory.created_by_user === currentUser.name &&
+                                        <button onClick={(e) => { e.stopPropagation(); handleDeleteMemory(memory); }} className="absolute top-1 right-1 bg-black/40 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500">
+                                            <TrashIcon className="w-3 h-3"/>
                                         </button>
-                                    )}
+                                    }
                                 </div>
                             ))}
                         </div>
                     ) : (
-                        <div className="text-center py-6 bg-slate-50 rounded-lg">
-                            <p className="text-slate-500">Nenhuma memória adicionada ainda.</p>
-                            <p className="text-slate-400 text-sm">Seja o primeiro a registrar um momento!</p>
-                        </div>
+                        <p className="text-center text-slate-500 py-4">Nenhuma memória adicionada ainda.</p>
                     )}
                 </div>
 
-                <div className="pt-4 border-t space-y-4">
-                    <h4 className="font-bold text-lg text-slate-800 text-center">Nossas Opiniões</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 md:gap-8">
-                        <div className="bg-slate-50 p-4 rounded-lg">
-                            <h5 className="font-bold text-lg mb-2">Sua Avaliação ({currentUser.name === 'Ana Beatriz Diva Linda' ? 'Ana' : currentUser.name})</h5>
-                            <div className="space-y-3">
-                                <StarRatingInput rating={rating} setRating={setRating} />
-                                <textarea value={comment} onChange={e => setComment(e.target.value)} placeholder="Seu comentário..." rows={3} className="w-full p-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary"></textarea>
-                                <Button onClick={handleReviewSubmit} disabled={rating === 0 || isSavingReview}>
-                                    {isSavingReview ? 'Salvando...' : 'Salvar Avaliação'}
-                                </Button>
-                            </div>
-                        </div>
-
-                        {partnerReview ? (
-                             <div className="p-4 rounded-lg mt-4 md:mt-0">
-                                <h5 className="font-bold text-lg mb-2">Avaliação de {partner === 'Ana Beatriz Diva Linda' ? 'Ana' : partner}</h5>
-                                <div className="space-y-3">
-                                    <StarRatingDisplay rating={partnerReview.rating}/>
-                                    {partnerReview.comment && <p className="text-slate-700 italic bg-white p-3 rounded-md border">"{partnerReview.comment}"</p>}
-                                </div>
-                            </div>
-                        ) : (
-                             <div className="p-4 rounded-lg mt-4 md:mt-0 flex items-center justify-center bg-slate-50">
-                                 <p className="text-slate-500 text-center">Ainda não há avaliação de {partner === 'Ana Beatriz Diva Linda' ? 'Ana' : partner}.</p>
-                             </div>
-                        )}
+                <div className="p-4 bg-slate-100/70 rounded-lg border border-slate-200">
+                    <div className="flex justify-between items-center mb-2">
+                        <h4 className="font-bold text-lg text-dark">Promoções Semanais</h4>
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={handleFetchPromotions}
+                            disabled={isFetchingPromotions}
+                        >
+                            <SparklesIcon className={`w-4 h-4 ${isFetchingPromotions ? 'animate-spin' : ''}`} />
+                            {isFetchingPromotions ? 'Buscando...' : 'Buscar com IA'}
+                        </Button>
                     </div>
+                     <div className="p-2 text-sm text-slate-700 whitespace-pre-wrap">
+                        {restaurant.weekly_promotions ? restaurant.weekly_promotions.replace(/(\r\n|\n|\r)/gm, "\n") : <p className="italic text-slate-500">Clique em "Buscar com IA" para procurar por promoções e happy hours.</p>}
+                     </div>
                 </div>
 
-                <div className="pt-4 border-t flex flex-col sm:flex-row gap-3">
-                     <Button
-                        variant="accent"
-                        onClick={handleNavigate}
-                        disabled={isNavDisabled || copyStatus !== 'idle'}
-                        className="w-full !justify-center"
-                    >
-                        <UberIcon className="w-5 h-5"/>
-                        {getUberButtonText()}
+                <div className="flex justify-between items-center pt-6 border-t mt-6">
+                    <Button variant="danger" size="sm" onClick={() => onRemoveFromList(restaurant.id)}>
+                        <TrashIcon className="w-4 h-4" /> Remover da Lista
                     </Button>
-                    <Button variant="secondary" onClick={() => onToggleFavorite(restaurant.id, restaurant.is_favorited)} className="w-full !justify-center">
-                        <HeartIcon className={`w-5 h-5 ${restaurant.is_favorited ? 'text-red-500' : 'text-slate-500'}`} />
-                        {restaurant.is_favorited ? 'Favoritado' : 'Favoritar'}
-                    </Button>
-                     <Button variant="secondary" onClick={() => onRemoveFromList(restaurant.id)} className="w-full !justify-center">
-                        <TrashIcon className="w-5 h-5 text-red-500"/>
-                        Remover da Lista
-                    </Button>
-                    <Button variant="secondary" onClick={() => onEdit(restaurant)} className="w-full !justify-center">
-                        <PencilIcon className="w-5 h-5"/>
-                        Editar Detalhes
-                    </Button>
+                    <div className="flex items-center gap-2">
+                         <button
+                            onClick={() => onToggleFavorite(restaurant.id, restaurant.is_favorited)}
+                            className={`p-2 rounded-full transition-colors ${restaurant.is_favorited ? 'text-red-500 bg-red-100' : 'text-slate-500 bg-slate-200 hover:bg-slate-300'}`}
+                            aria-label={restaurant.is_favorited ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
+                        >
+                            <HeartIcon className="w-6 h-6" />
+                        </button>
+                        <Button variant="secondary" size="sm" onClick={() => onEdit(restaurant)}><PencilIcon className="w-4 h-4"/> Editar Detalhes</Button>
+                    </div>
                 </div>
             </div>
 
-            {/* --- Date Planner Modal --- */}
-            <Modal isOpen={isDatePlannerOpen} onClose={() => setIsDatePlannerOpen(false)} title={`Planejar Date em: ${restaurant.name}`}>
+            {/* --- Modals --- */}
+            <Modal isOpen={isMemoryModalOpen} onClose={handleMemoryModalClose} title="Adicionar Memória">
+                <div className="space-y-4">
+                    <label htmlFor="memory-upload" className="w-full cursor-pointer justify-center p-6 border-2 border-dashed border-slate-300 hover:border-primary hover:bg-slate-50 rounded-lg flex flex-col items-center gap-2 text-slate-600">
+                        <CameraIcon className="w-8 h-8"/>
+                        <span>Clique para escolher fotos ou vídeos</span>
+                        <input id="memory-upload" type="file" accept="image/*,video/*" multiple onChange={handleFilesChange} className="hidden" />
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                        {previews.map(p => (
+                            <div key={p.id} className="relative group">
+                                <img src={p.src} alt="Preview" className="w-full h-24 object-cover rounded"/>
+                                <button onClick={() => removePreview(p.id)} className="absolute top-1 right-1 bg-black/50 p-1 rounded-full text-white opacity-0 group-hover:opacity-100"><XMarkIcon className="w-3 h-3"/></button>
+                            </div>
+                        ))}
+                    </div>
+                    <Input value={newMemoryCaption} onChange={e => setNewMemoryCaption(e.target.value)} placeholder="Legenda (opcional)" />
+                    <div className="flex justify-end gap-3 pt-4 border-t">
+                        <Button type="button" variant="secondary" onClick={handleMemoryModalClose}>Cancelar</Button>
+                        <Button type="button" onClick={handleSaveMemory} disabled={isSavingMemory || isProcessingMemory || newMemoryFiles.length === 0}>{getMemoryButtonText()}</Button>
+                    </div>
+                </div>
+            </Modal>
+            
+            <Modal isOpen={!!viewingMemory} onClose={handleCloseViewingMemory} title={viewingMemory?.caption || 'Memória'}>
+                 {viewingMemory && (
+                    <div className="space-y-4">
+                        {viewingMemory.type === 'video' ? (
+                            <video src={viewingMemory.image_url} controls autoPlay className="w-full max-h-[70vh] rounded-lg bg-black"></video>
+                        ) : (
+                            <img src={viewingMemory.image_url} alt={viewingMemory.caption || ''} className="w-full max-h-[70vh] object-contain rounded-lg"/>
+                        )}
+                        <div className="text-center">
+                            {viewingMemory.created_by_user === currentUser.name && isEditingDate ? (
+                                <div className="flex items-center justify-center gap-2">
+                                    <Input type="number" value={editingMonth} min="1" max="12" onChange={e => setEditingMonth(Number(e.target.value))} className="w-20" />
+                                    <Input type="number" value={editingYear} min="2000" max={new Date().getFullYear()} onChange={e => setEditingYear(Number(e.target.value))} className="w-24" />
+                                    <Button size="sm" onClick={() => handleSaveDateChange(viewingMemory)}>Salvar</Button>
+                                    <Button size="sm" variant="secondary" onClick={() => setIsEditingDate(false)}>Cancelar</Button>
+                                </div>
+                            ) : (
+                                <div className="group flex items-center justify-center gap-2 text-slate-500">
+                                    <span>{new Date(viewingMemory.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
+                                    {viewingMemory.created_by_user === currentUser.name && 
+                                        <button onClick={() => handleStartEditingDate(viewingMemory)} className="opacity-0 group-hover:opacity-100"><PencilIcon className="w-4 h-4"/></button>
+                                    }
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                 )}
+            </Modal>
+
+            <Modal isOpen={isDatePlannerOpen} onClose={() => setIsDatePlannerOpen(false)} title={`Propor um date no ${restaurant.name}`}>
                 <DatePlannerForm 
                     onSave={handleProposeDate}
                     onClose={() => setIsDatePlannerOpen(false)}
                     isSaving={isSavingDate}
                 />
             </Modal>
-
-            {/* --- Add Memory Modal --- */}
-            <Modal isOpen={isMemoryModalOpen} onClose={handleMemoryModalClose} title="Adicionar Novas Memórias">
-                <div className="space-y-4">
-                    <div>
-                        <label htmlFor="memory-image" className="block text-sm font-medium text-slate-700 mb-1">Fotos ou Vídeos</label>
-                        <input
-                            id="memory-image"
-                            type="file"
-                            accept="image/*,video/*"
-                            multiple
-                            onChange={handleFilesChange}
-                            className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
-                            disabled={isSavingMemory || isProcessingMemory}
-                        />
-                        <p className="text-xs text-slate-500 mt-1">Dica: vídeos tem um limite de 25MB.</p>
-                    </div>
-                    
-                    {previews.length > 0 && (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                            {previews.map(p => (
-                                <div key={p.id} className="relative group aspect-square">
-                                    {p.type === 'video' ? (
-                                        <video src={p.src} className="w-full h-full object-cover rounded-md bg-slate-200" muted loop playsInline/>
-                                    ) : (
-                                        <img src={p.src} alt="Preview" className="w-full h-full object-cover rounded-md bg-slate-200"/>
-                                    )}
-                                    <button
-                                        type="button"
-                                        onClick={() => removePreview(p.id)}
-                                        className="absolute top-1 right-1 bg-black/50 p-1.5 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
-                                        disabled={isSavingMemory || isProcessingMemory}
-                                    >
-                                        <XMarkIcon className="w-4 h-4"/>
-                                    </button>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-
-                    <div>
-                        <label htmlFor="memory-caption" className="block text-sm font-medium text-slate-700 mb-1">Legenda (para todas as mídias)</label>
-                        <Input
-                            id="memory-caption"
-                            value={newMemoryCaption}
-                            onChange={e => setNewMemoryCaption(e.target.value)}
-                            placeholder="Ex: Aniversário de namoro!"
-                            disabled={isSavingMemory || isProcessingMemory}
-                        />
-                    </div>
-                    <div className="flex justify-end gap-3 pt-4 border-t">
-                        <Button type="button" variant="secondary" onClick={handleMemoryModalClose} disabled={isSavingMemory || isProcessingMemory}>Cancelar</Button>
-                        <Button type="button" onClick={handleSaveMemory} disabled={isSavingMemory || isProcessingMemory || newMemoryFiles.length === 0}>
-                            {getMemoryButtonText()}
-                        </Button>
-                    </div>
-                </div>
-            </Modal>
-            
-            {/* View Memory Modal */}
-            {viewingMemory && (
-                <Modal isOpen={true} onClose={handleCloseViewingMemory} title={viewingMemory.caption || `Memória em ${restaurant.name}`}>
-                     <div className="space-y-4">
-                        <div className="bg-black rounded-lg flex items-center justify-center max-h-[60vh]">
-                            {viewingMemory.type === 'video' ? (
-                                <video src={viewingMemory.image_url} className="max-h-[60vh] w-auto" controls autoPlay loop />
-                            ) : (
-                                <img src={viewingMemory.image_url} alt={viewingMemory.caption} className="max-h-[60vh] w-auto object-contain"/>
-                            )}
-                        </div>
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-                             <div>
-                                <p className="font-semibold text-slate-800">{viewingMemory.caption}</p>
-                                <div className="text-sm text-slate-500">
-                                    <span>{viewingMemory.created_by_user}, </span>
-                                    {isEditingDate ? (
-                                        <div className="inline-flex items-center gap-2">
-                                            <select value={editingMonth} onChange={(e) => setEditingMonth(Number(e.target.value))} className="p-1 border rounded text-sm">
-                                                {Array.from({length: 12}, (_, i) => i + 1).map(m => <option key={m} value={m}>{new Date(0, m-1).toLocaleString('pt-BR', { month: 'long' })}</option>)}
-                                            </select>
-                                            <select value={editingYear} onChange={(e) => setEditingYear(Number(e.target.value))} className="p-1 border rounded text-sm">
-                                                 {Array.from({length: 10}, (_, i) => new Date().getFullYear() - i).map(y => <option key={y} value={y}>{y}</option>)}
-                                            </select>
-                                            <Button size="sm" onClick={() => handleSaveDateChange(viewingMemory)}>Salvar</Button>
-                                            <Button size="sm" variant="secondary" onClick={() => setIsEditingDate(false)}>Cancelar</Button>
-                                        </div>
-                                    ) : (
-                                        <>
-                                            <span>{new Date(viewingMemory.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
-                                            {viewingMemory.created_by_user === currentUser.name && (
-                                                <Button variant="ghost" size="sm" className="!p-1 ml-1" onClick={() => handleStartEditingDate(viewingMemory)} title="Editar Mês/Ano">
-                                                    <PencilIcon className="w-4 h-4" />
-                                                </Button>
-                                            )}
-                                        </>
-                                    )}
-                                </div>
-                             </div>
-                            {viewingMemory.created_by_user === currentUser.name && (
-                                <Button variant="danger" size="sm" onClick={() => handleDeleteMemory(viewingMemory)}>
-                                    <TrashIcon className="w-4 h-4"/> Apagar Memória
-                                </Button>
-                            )}
-                        </div>
-                    </div>
-                </Modal>
-            )}
         </>
     );
 };

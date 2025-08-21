@@ -1,3 +1,5 @@
+/// <reference types="vite/client" />
+
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '../utils/supabase';
 import { User, Recipe, RecipeCategory, Ingredient, NutritionalAnalysis, Drink, DrinkCategory } from '../types';
@@ -295,7 +297,7 @@ const RecipeImportModal: React.FC<{
         setImportError(null);
 
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
             
             const isQueryUrl = isUrl(queryInput);
 
@@ -554,7 +556,7 @@ const RecipeForm: React.FC<{
 
         setIsParsingIngredients(true);
         try {
-            const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
+            const ai = new GoogleGenAI({apiKey: import.meta.env.VITE_GEMINI_API_KEY});
 
             const base64EncodedDataPromise: Promise<string> = new Promise((resolve, reject) => {
                 const reader = new FileReader();
@@ -627,7 +629,7 @@ const RecipeForm: React.FC<{
         }
         setIsGeneratingInstructions(true);
         try {
-            const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
+            const ai = new GoogleGenAI({apiKey: import.meta.env.VITE_GEMINI_API_KEY});
             
             const ingredientsList = ingredients
                 .filter(ing => ing.name && !ing.is_heading)
@@ -857,7 +859,7 @@ const FoodSection: React.FC<{ currentUser: User }> = ({ currentUser }) => {
         setAnalysisResult(null);
         setAnalysisError(null);
         try {
-            const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
+            const ai = new GoogleGenAI({apiKey: import.meta.env.VITE_GEMINI_API_KEY});
             const ingredientsString = recipe.ingredients
                 .filter(ing => !ing.is_heading && ing.name)
                 .map(ing => `${ing.quantity || ''} ${ing.name}`.trim())
@@ -1174,7 +1176,7 @@ const DrinkImportModal: React.FC<{ onClose: () => void; onImportSuccess: (data: 
     const handleSearchWithAI = async () => {
         if (!queryInput) return; setIsImporting(true); setImportError(null);
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
             const prompt = `Realize uma busca no Google pela receita do drink: "${queryInput}". Analise a receita e retorne APENAS UM OBJETO JSON VÁLIDO com as chaves: "name" (string), "category" (um de [${DRINK_CATEGORIES.map(c => `'${c}'`).join(', ')}]), "glass" (string), "garnish" (string, ou null), "image_url" (string, ou null), "ingredients" (array de objetos com "name", "quantity", "is_heading"), "instructions" (string com passos separados por "\\n"). A resposta deve ser toda em português brasileiro.`;
             
             const response = await ai.models.generateContent({ 

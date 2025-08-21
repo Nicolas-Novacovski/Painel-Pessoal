@@ -1,4 +1,4 @@
-
+/// <reference types="vite/client" />
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../utils/supabase';
@@ -335,7 +335,7 @@ const WellnessApp: React.FC<WellnessAppProps> = ({ currentUser }) => {
         setIsSuggesting(true);
         setSuggestion(null);
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
 
             const myMoodData = myMood ? MOODS.find(m => m.value === myMood) : null;
             const partnerMoodData = partner ? (partnerMood ? MOODS.find(m => m.value === partnerMood) : null) : null;

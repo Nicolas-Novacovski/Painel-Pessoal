@@ -1,3 +1,5 @@
+/// <reference types="vite/client" />
+
 import React, { useState, useEffect, useRef } from 'react';
 import { GoogleGenAI, Type } from "@google/genai";
 import { Button } from './UIComponents';
@@ -75,7 +77,7 @@ const RecipeVoiceInputModal: React.FC<RecipeVoiceInputModalProps> = ({ onClose, 
         setError(null);
 
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
             
             const prompt = `
             Analise o seguinte texto de uma receita ditada e extraia as informações, retornando APENAS UM OBJETO JSON VÁLIDO:

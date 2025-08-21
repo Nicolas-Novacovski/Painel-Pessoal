@@ -34,7 +34,7 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'accent' | 'secondary' | 'danger' | 'ghost';
   size?: 'sm' | 'md' | 'lg';
   justify?: 'center' | 'start';
-  children: React.ReactNode;
+  children?: React.ReactNode;
 }
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(({ children, className, variant = 'primary', size='md', justify = 'center', ...props }, ref) => {

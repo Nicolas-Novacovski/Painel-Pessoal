@@ -1,3 +1,5 @@
+/// <reference types="vite/client" />
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Trip, ItineraryItem, TripExpense, ChecklistItem, ItineraryCategory, GalleryItem, TripExpenseCategory } from '../types';
 import { supabase } from '../utils/supabase';
@@ -335,7 +337,7 @@ const ItineraryTab: React.FC<{
         setSuggestions([]);
         setSelectedSubOptions({});
         try {
-            const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
+            const ai = new GoogleGenAI({apiKey: import.meta.env.VITE_GEMINI_API_KEY});
 
             const existingItems = itinerary.map(item => item.description).join(', ');
 
