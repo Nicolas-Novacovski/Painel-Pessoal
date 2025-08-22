@@ -73,6 +73,15 @@ const DesktopSidebar: React.FC<NavigationProps> = ({ activeView, setActiveView, 
                     <ArrowLeftOnRectangleIcon className="w-5 h-5"/>
                     <span>Sair</span>
                 </Button>
+                <div className="text-center text-xs text-slate-400 pt-2">
+                    <a href="/privacy.html" target="_blank" rel="noopener noreferrer" className="hover:underline">
+                        Privacidade
+                    </a>
+                    <span className="mx-1">·</span>
+                    <a href="/terms.html" target="_blank" rel="noopener noreferrer" className="hover:underline">
+                        Termos
+                    </a>
+                </div>
             </div>
         </aside>
     );

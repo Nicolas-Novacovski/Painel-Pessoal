@@ -75,21 +75,32 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, isInitializing, erro
     }
     
     return (
-        <div className="flex items-center justify-center h-screen bg-slate-100">
-            <div className="text-center bg-white p-12 rounded-2xl shadow-xl max-w-md mx-4 animate-fade-in">
-                <h1 className="font-hand text-6xl text-primary mb-2">Nosso Painel</h1>
-                <p className="text-slate-600 mb-8">Um lugar especial para organizar nossa vida juntos.</p>
-                
-                {error && <p className="text-red-500 bg-red-50 p-3 rounded-lg mb-4 text-sm">{error}</p>}
+        <div className="flex items-center justify-center h-screen bg-slate-100 p-4">
+            <div className="w-full max-w-md">
+                <div className="text-center bg-white p-12 rounded-2xl shadow-xl animate-fade-in">
+                    <h1 className="font-hand text-6xl text-primary mb-2">Nosso Painel</h1>
+                    <p className="text-slate-600 mb-8">Um lugar especial para organizar nossa vida juntos.</p>
+                    
+                    {error && <p className="text-red-500 bg-red-50 p-3 rounded-lg mb-4 text-sm">{error}</p>}
 
-                <Button
-                    size="lg"
-                    onClick={onLogin}
-                    disabled={isInitializing}
-                >
-                    <GoogleIcon className="w-6 h-6" />
-                    <span>{isInitializing ? 'Inicializando...' : 'Entrar com Google'}</span>
-                </Button>
+                    <Button
+                        size="lg"
+                        onClick={onLogin}
+                        disabled={isInitializing}
+                    >
+                        <GoogleIcon className="w-6 h-6" />
+                        <span>{isInitializing ? 'Inicializando...' : 'Entrar com Google'}</span>
+                    </Button>
+                </div>
+                <div className="text-center text-xs text-slate-500 mt-6">
+                    <a href="/privacy.html" target="_blank" rel="noopener noreferrer" className="hover:underline">
+                        Política de Privacidade
+                    </a>
+                    <span className="mx-2">·</span>
+                    <a href="/terms.html" target="_blank" rel="noopener noreferrer" className="hover:underline">
+                        Termos de Serviço
+                    </a>
+                </div>
             </div>
         </div>
     );
