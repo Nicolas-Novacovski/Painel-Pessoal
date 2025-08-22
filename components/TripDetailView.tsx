@@ -33,6 +33,7 @@ const TripDetailView: React.FC<TripDetailViewProps> = ({ trip, onBack, onTripUpd
     const [itineraryModal, setItineraryModal] = useState<{ open: boolean; item?: ItineraryItem }>({ open: false });
     const [expenseModal, setExpenseModal] = useState<{ open: boolean; item?: TripExpense }>({ open: false });
     const [viewingImage, setViewingImage] = useState<GalleryItem | null>(null);
+    const [isAiModalOpen, setIsAiModalOpen] = useState(false);
 
     const fetchData = useCallback(async () => {
         setIsLoading({ itinerary: true, expenses: true, gallery: true });
@@ -170,6 +171,11 @@ const TripDetailView: React.FC<TripDetailViewProps> = ({ trip, onBack, onTripUpd
         fetchData();
     };
     
+    const handleAddSuggestionToItinerary = (itemData: Partial<ItineraryItem>) => {
+        setItineraryModal({ open: true, item: { ...itemData, id: '', trip_id: trip.id, is_completed: false, created_at: new Date().toISOString() } as ItineraryItem });
+        setIsAiModalOpen(false);
+    };
+    
     const navItems = [
         { id: 'overview', label: 'Visão Geral', icon: CalendarDaysIcon },
         { id: 'itinerary', label: 'Roteiro', icon: RouteIcon },
@@ -181,7 +187,7 @@ const TripDetailView: React.FC<TripDetailViewProps> = ({ trip, onBack, onTripUpd
     const renderContent = () => {
         switch(activeTab) {
             case 'overview': return <OverviewTab trip={trip} itinerary={itinerary} expenses={expenses} isLoading={isLoading.itinerary || isLoading.expenses} />;
-            case 'itinerary': return <ItineraryTab trip={trip} itinerary={itinerary} isLoading={isLoading.itinerary} onEdit={(item) => setItineraryModal({ open: true, item })} onDelete={handleDeleteItineraryItem} onAddNew={() => setItineraryModal({ open: true })} />;
+            case 'itinerary': return <ItineraryTab trip={trip} itinerary={itinerary} isLoading={isLoading.itinerary} onEdit={(item) => setItineraryModal({ open: true, item })} onDelete={handleDeleteItineraryItem} onAddNew={() => setItineraryModal({ open: true })} onSuggest={() => setIsAiModalOpen(true)} />;
             case 'budget': return <BudgetTab trip={trip} expenses={expenses} isLoading={isLoading.expenses} onEdit={(item) => setExpenseModal({ open: true, item })} onDelete={handleDeleteExpense} onAddNew={() => setExpenseModal({ open: true })} />;
             case 'gallery': return <GalleryTab trip={trip} gallery={gallery} isLoading={isLoading.gallery} onSave={handleSaveGalleryItem} onDelete={handleDeleteGalleryItem} onFetch={fetchData} onSelectImage={setViewingImage} />;
             case 'checklist': return <ChecklistTab trip={trip} onTripUpdate={onTripUpdate} />;
@@ -243,6 +249,9 @@ const TripDetailView: React.FC<TripDetailViewProps> = ({ trip, onBack, onTripUpd
                     </div>
                 )}
             </Modal>
+             <Modal isOpen={isAiModalOpen} onClose={() => setIsAiModalOpen(false)} title={`Sugestões para ${trip.destination}`}>
+                <AISuggestionModal trip={trip} onAddSuggestion={handleAddSuggestionToItinerary} onClose={() => setIsAiModalOpen(false)} />
+            </Modal>
         </>
     );
 };
@@ -296,7 +305,7 @@ const OverviewTab: React.FC<{ trip: Trip; itinerary: ItineraryItem[]; expenses: 
         </div>
     );
 };
-const ItineraryTab: React.FC<{ trip: Trip; itinerary: ItineraryItem[]; isLoading: boolean; onEdit: (item: ItineraryItem) => void; onDelete: (id: string) => void; onAddNew: () => void; }> = ({ trip, itinerary, isLoading, onEdit, onDelete, onAddNew }) => {
+const ItineraryTab: React.FC<{ trip: Trip; itinerary: ItineraryItem[]; isLoading: boolean; onEdit: (item: ItineraryItem) => void; onDelete: (id: string) => void; onAddNew: () => void; onSuggest: () => void; }> = ({ trip, itinerary, isLoading, onEdit, onDelete, onAddNew, onSuggest }) => {
     const itineraryByDate = useMemo(() => {
         return itinerary.reduce((acc, item) => {
             const date = item.item_date;
@@ -314,7 +323,8 @@ const ItineraryTab: React.FC<{ trip: Trip; itinerary: ItineraryItem[]; isLoading
 
     return (
         <div>
-            <div className="flex justify-end mb-4">
+            <div className="flex justify-end gap-2 mb-4">
+                <Button onClick={onSuggest} variant="accent"><SparklesIcon className="w-5 h-5"/> Sugerir com IA</Button>
                 <Button onClick={onAddNew}><PlusIcon className="w-5 h-5"/> Adicionar Item</Button>
             </div>
             {Object.keys(itineraryByDate).length === 0 ? (
@@ -590,5 +600,77 @@ const ExpenseForm: React.FC<{ onSave: (expense: Omit<TripExpense, 'id'|'trip_id'
         </form>
     );
 };
+
+const AISuggestionModal: React.FC<{
+    trip: Trip;
+    onAddSuggestion: (itemData: Partial<ItineraryItem>) => void;
+    onClose: () => void;
+}> = ({ trip, onAddSuggestion, onClose }) => {
+    const [interests, setInterests] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [suggestions, setSuggestions] = useState<any[]>([]);
+    const [error, setError] = useState('');
+
+    const handleGetSuggestions = async () => {
+        setIsLoading(true);
+        setError('');
+        setSuggestions([]);
+        try {
+            const ai = new GoogleGenAI({apiKey: import.meta.env.VITE_GEMINI_API_KEY});
+            const prompt = `Sugira 5 atividades de roteiro para uma viagem para ${trip.destination || trip.name}. Interesses: ${interests || 'geral'}. Para cada sugestão, forneça: description, category (activity, food, transport), cost (estimativa numérica), e notes (endereço ou detalhes). Retorne um array de objetos JSON.`;
+            
+            const response = await ai.models.generateContent({
+                model: "gemini-2.5-flash",
+                contents: prompt,
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: Type.ARRAY,
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                description: { type: Type.STRING },
+                                category: { type: Type.STRING, enum: ['activity', 'food', 'transport', 'accommodation'] },
+                                cost: { type: Type.NUMBER },
+                                notes: { type: Type.STRING }
+                            },
+                        },
+                    },
+                },
+            });
+            const result = JSON.parse(response.text.trim());
+            setSuggestions(result);
+        } catch (err) {
+            console.error(err);
+            setError("Não foi possível buscar sugestões. Tente novamente.");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    return (
+        <div className="space-y-4">
+            <Input value={interests} onChange={e => setInterests(e.target.value)} placeholder="Interesses (ex: arte, gastronomia, natureza)" />
+            <Button onClick={handleGetSuggestions} disabled={isLoading} className="w-full">
+                {isLoading ? 'Buscando...' : 'Obter Sugestões'}
+            </Button>
+            {error && <p className="text-red-500">{error}</p>}
+            {suggestions.length > 0 && (
+                <div className="space-y-3 max-h-80 overflow-y-auto p-1">
+                    {suggestions.map((s, i) => (
+                        <div key={i} className="p-3 bg-slate-50 rounded-lg flex justify-between items-center">
+                            <div>
+                                <p className="font-semibold">{s.description}</p>
+                                <p className="text-sm text-slate-500">{s.notes} - ~{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(s.cost)}</p>
+                            </div>
+                            <Button size="sm" onClick={() => onAddSuggestion(s)}>Adicionar</Button>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    )
+}
+
 
 export default TripDetailView;

@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Restaurant, Review, User, RestaurantCategory, Memory, DatePlan, UserProfile, CuratedList, Location } from '../types';
 import { RESTAURANT_CATEGORIES, ADMIN_COUPLE_EMAILS, USERS } from '../constants';
-import { PlusIcon, SparklesIcon, ChevronDownIcon, BookmarkIcon, InformationCircleIcon, MapIcon, TicketIcon, CheckIcon } from './Icons';
+import { PlusIcon, SparklesIcon, ChevronDownIcon, BookmarkIcon, InformationCircleIcon, MapIcon, TicketIcon, CheckIcon, ArrowPathIcon } from './Icons';
 import { Modal, Button, Input, SegmentedControl } from './UIComponents';
 import { RestaurantCard } from './RestaurantCard';
 import { RestaurantForm } from './RestaurantForm';
@@ -585,6 +585,29 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser, onProfileU
             throw error;
         }
     };
+
+    const handleResetChoices = async () => {
+        if (window.confirm("Tem certeza que deseja reiniciar suas avaliações de 'like' e 'dislike' para todos os restaurantes? Isso permitirá que você os avalie novamente no Modo Descoberta. Esta ação não pode ser desfeita.")) {
+            if (!currentUser.couple_id) return;
+            
+            setCoupleRestaurants(prev => 
+                prev.map(r => ({ ...r, is_favorited: false }))
+            );
+    
+            const { error } = await supabase
+                .from('couple_restaurants')
+                .update({ is_favorited: false })
+                .eq('couple_id', currentUser.couple_id);
+    
+            if (error) {
+                console.error("Error resetting choices:", error);
+                alert("Ocorreu um erro ao reiniciar as avaliações. A tela será atualizada.");
+                fetchData();
+            } else {
+                alert("Suas escolhas foram reiniciadas! Você já pode usar o Modo Descoberta novamente.");
+            }
+        }
+    };
     
     const proximityOptions = useMemo(() => {
         const options = [{ label: 'Qualquer', value: 'all' }];
@@ -904,6 +927,12 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser, onProfileU
                                                 <option value="recent">Mais Recentes</option>
                                                 <option value="distance" disabled={proximityFilter === 'all'}>Distância</option>
                                             </select>
+                                        </div>
+                                        <div className="pt-4 border-t">
+                                            <Button variant="danger" size="sm" onClick={handleResetChoices} className="w-full">
+                                                <ArrowPathIcon className="w-4 h-4" />
+                                                Reiniciar Avaliações (Like/Dislike)
+                                            </Button>
                                         </div>
                                     </div>
                                 )}

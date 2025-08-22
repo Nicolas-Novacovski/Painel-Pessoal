@@ -1,12 +1,39 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '../utils/supabase';
-import { UserProfile, Trip, TripStatus } from '../types';
+import { UserProfile, Trip, TripStatus, ChecklistItem } from '../types';
 import { Button, Modal } from './UIComponents';
 import { PlusIcon, PaperAirplaneIcon, EllipsisVerticalIcon, PencilIcon, TrashIcon } from './Icons';
 import TripForm from './TripForm';
 import TripDetailView from './TripDetailView';
 import { slugify } from '../utils/helpers';
 
+const DEFAULT_CHECKLIST: ChecklistItem[] = [
+    { id: crypto.randomUUID(), text: 'Documentos', is_done: false, is_heading: true },
+    { id: crypto.randomUUID(), text: 'Passaportes e Vistos', is_done: false },
+    { id: crypto.randomUUID(), text: 'RG ou CNH', is_done: false },
+    { id: crypto.randomUUID(), text: 'Comprovantes de vacinação', is_done: false },
+    { id: crypto.randomUUID(), text: 'Reservas e Passagens', is_done: false, is_heading: true },
+    { id: crypto.randomUUID(), text: 'Passagens aéreas/ônibus/trem', is_done: false },
+    { id: crypto.randomUUID(), text: 'Reservas de hotel/hospedagem', is_done: false },
+    { id: crypto.randomUUID(), text: 'Aluguel de carro', is_done: false },
+    { id: crypto.randomUUID(), text: 'Financeiro', is_done: false, is_heading: true },
+    { id: crypto.randomUUID(), text: 'Dinheiro em espécie (moeda local)', is_done: false },
+    { id: crypto.randomUUID(), text: 'Cartões de crédito/débito', is_done: false },
+    { id: crypto.randomUUID(), text: 'Seguro viagem', is_done: false },
+    { id: crypto.randomUUID(), text: 'Roupas e Acessórios', is_done: false, is_heading: true },
+    { id: crypto.randomUUID(), text: 'Roupas adequadas para o clima', is_done: false },
+    { id: crypto.randomUUID(), text: 'Calçados confortáveis', is_done: false },
+    { id: crypto.randomUUID(), text: 'Óculos de sol e chapéu', is_done: false },
+    { id: crypto.randomUUID(), text: 'Saúde e Higiene', is_done: false, is_heading: true },
+    { id: crypto.randomUUID(), text: 'Itens de higiene pessoal', is_done: false },
+    { id: crypto.randomUUID(), text: 'Remédios de uso contínuo', is_done: false },
+    { id: crypto.randomUUID(), text: 'Kit de primeiros socorros', is_done: false },
+    { id: crypto.randomUUID(), text: 'Protetor solar e repelente', is_done: false },
+    { id: crypto.randomUUID(), text: 'Eletrônicos', is_done: false, is_heading: true },
+    { id: crypto.randomUUID(), text: 'Celular e carregador', is_done: false },
+    { id: crypto.randomUUID(), text: 'Carregador portátil (power bank)', is_done: false },
+    { id: crypto.randomUUID(), text: 'Adaptador de tomada universal', is_done: false },
+];
 
 const TRAVEL_SETUP_SQL = `
 -- SCRIPT DE CONFIGURAÇÃO PARA O MÓDULO DE VIAGENS
@@ -220,7 +247,7 @@ const TravelApp: React.FC<TravelAppProps> = ({ currentUser }) => {
                     setSelectedTrip(prev => prev ? { ...prev, ...dataToSave } : null);
                 }
             } else {
-                const { error } = await supabase.from('trips').insert([{ ...dataToSave, couple_id: currentUser.couple_id!, status: 'planning' }]);
+                const { error } = await supabase.from('trips').insert([{ ...dataToSave, couple_id: currentUser.couple_id!, status: 'planning', checklist: DEFAULT_CHECKLIST }]);
                 if (error) throw error;
             }
 
