@@ -1066,6 +1066,17 @@ const FoodSection: React.FC<{ currentUser: User }> = ({ currentUser }) => {
             <Modal isOpen={isVoiceModalOpen} onClose={() => setIsVoiceModalOpen(false)} title="Adicionar Receita por Voz"><RecipeVoiceInputModal onClose={() => setIsVoiceModalOpen(false)} onImportSuccess={handleOpenFormWithImportedData}/></Modal>
             <Modal isOpen={isAnalysisModalOpen} onClose={handleCloseAnalysis} title={`Análise Nutricional: ${analyzingRecipe?.name || ''}`}><NutritionalAnalysisView isAnalyzing={isAnalyzing} analysisResult={analysisResult} analysisError={analysisError}/></Modal>
             {cookingRecipe && <CookingModeView recipe={cookingRecipe} onClose={() => setCookingRecipe(null)} />}
+
+            <div className="md:hidden fixed bottom-24 right-4 z-50 flex flex-col gap-3">
+                <Button onClick={() => setIsImportModalOpen(true)} variant="accent" className="!rounded-full !p-4 shadow-lg">
+                    <SparklesIcon className="w-7 h-7" />
+                    <span className="sr-only">Buscar com IA</span>
+                </Button>
+                <Button onClick={() => { setEditingRecipe(null); setIsFormModalOpen(true); }} variant="primary" className="!rounded-full !p-4 shadow-lg">
+                    <PlusIcon className="w-7 h-7" />
+                    <span className="sr-only">Adicionar Receita</span>
+                </Button>
+            </div>
         </>
     );
 };
@@ -1212,6 +1223,7 @@ const DrinksSection: React.FC<{ currentUser: User }> = ({ currentUser }) => {
     const [isFormModalOpen, setIsFormModalOpen] = useState(false);
     const [editingDrink, setEditingDrink] = useState<Drink | null>(null);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [isMobileListOpen, setIsMobileListOpen] = useState(false);
     
     const fetchDrinks = useCallback(async () => {
         const { data, error } = await supabase.from('drinks').select('*').order('name', { ascending: true });
@@ -1273,6 +1285,31 @@ const DrinksSection: React.FC<{ currentUser: User }> = ({ currentUser }) => {
 
     return (
         <>
+            <div className="md:hidden relative mb-4">
+                <button
+                    onClick={() => setIsMobileListOpen(!isMobileListOpen)}
+                    className="w-full bg-white p-3 rounded-lg shadow-sm text-left flex justify-between items-center button-active-effect"
+                >
+                    <span className="font-semibold text-slate-700 truncate">{selectedDrink?.name || 'Selecione um drink'}</span>
+                    <ChevronDownIcon className={`w-5 h-5 text-slate-500 transition-transform ${isMobileListOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {isMobileListOpen && (
+                    <div className="absolute top-full left-0 right-0 bg-white border border-slate-200 shadow-lg rounded-lg mt-1 z-20 max-h-80 overflow-y-auto">
+                        <div className="p-2 space-y-1">
+                            {drinks.map(drink => (
+                                <button
+                                    key={drink.id}
+                                    onClick={() => { setSelectedDrink(drink); setIsMobileListOpen(false); }}
+                                    className={`w-full text-left p-3 rounded-md flex items-center gap-3 ${ selectedDrink?.id === drink.id ? 'bg-primary/10 text-primary font-bold' : 'hover:bg-slate-100' }`}
+                                >
+                                    <img src={drink.image_url || `https://picsum.photos/seed/drink-${drink.id}/80/80`} alt={drink.name} className="w-8 h-8 object-cover rounded-md bg-slate-200 flex-shrink-0" />
+                                    <span className="truncate">{drink.name}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </div>
             <div className="flex flex-col md:flex-row gap-0 md:h-[calc(100vh-220px)]">
                 <aside className="md:w-1/3 lg:w-1/4 flex-col bg-white rounded-l-xl shadow-subtle p-4 border-r border-slate-200 hidden md:flex">
                     <div className="flex justify-between items-center mb-4"><h2 className="text-xl font-bold text-dark">Drinks</h2><div className="flex gap-2"><Button onClick={() => setIsImportModalOpen(true)} size="sm" variant="accent" title="Buscar com IA"><SparklesIcon className="w-4 h-4"/></Button><Button onClick={() => { setEditingDrink(null); setIsFormModalOpen(true); }} size="sm" title="Adicionar Manualmente"><PlusIcon className="w-4 h-4"/></Button></div></div>
@@ -1288,6 +1325,16 @@ const DrinksSection: React.FC<{ currentUser: User }> = ({ currentUser }) => {
             </div>
             <Modal isOpen={isFormModalOpen} onClose={() => { setIsFormModalOpen(false); setEditingDrink(null); }} title={editingDrink?.id ? "Editar Drink" : "Adicionar Drink"}><DrinkForm onSave={handleSaveDrink} onClose={() => { setIsFormModalOpen(false); setEditingDrink(null); }} initialData={editingDrink} /></Modal>
             <Modal isOpen={isImportModalOpen} onClose={() => setIsImportModalOpen(false)} title="Buscar Drink com IA"><DrinkImportModal onClose={() => setIsImportModalOpen(false)} onImportSuccess={handleOpenFormWithImportedData}/></Modal>
+            <div className="md:hidden fixed bottom-24 right-4 z-50 flex flex-col gap-3">
+                <Button onClick={() => setIsImportModalOpen(true)} variant="accent" className="!rounded-full !p-4 shadow-lg">
+                    <SparklesIcon className="w-7 h-7" />
+                    <span className="sr-only">Buscar com IA</span>
+                </Button>
+                <Button onClick={() => { setEditingDrink(null); setIsFormModalOpen(true); }} variant="primary" className="!rounded-full !p-4 shadow-lg">
+                    <PlusIcon className="w-7 h-7" />
+                    <span className="sr-only">Adicionar Drink</span>
+                </Button>
+            </div>
         </>
     );
 };
