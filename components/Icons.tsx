@@ -339,3 +339,9 @@ export const MartiniGlassIcon: React.FC<IconProps> = ({ className, ...props }) =
       <path strokeLinecap="round" strokeLinejoin="round" d="M12 22V12M12 12L6 4H18L12 12ZM6 4H2M18 4H22" />
     </svg>
 );
+
+export const Bars3Icon: React.FC<IconProps> = (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+    </svg>
+);

@@ -231,7 +231,7 @@ const App: React.FC = () => {
             />
             
             <div className="flex-1 flex flex-col overflow-y-auto bg-slate-50">
-                 <main className="flex-1 pb-20 sm:pb-0">
+                 <main className="flex-1">
                     <div key={view} className="animate-fade-in">
                         {renderView()}
                     </div>
