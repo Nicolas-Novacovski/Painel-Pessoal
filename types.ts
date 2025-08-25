@@ -1,4 +1,5 @@
 
+
 // --- Core Types ---
 export type Role = 'admin' | 'partner' | 'parent' | 'visitor';
 export type View = 'dashboard' | 'restaurants' | 'expenses' | 'recipes' | 'reminders' | 'wellness' | 'lists' | 'applications' | 'admin' | 'ai-recommender' | 'travel';
@@ -139,6 +140,7 @@ export interface Expense {
     due_date: string | null; // YYYY-MM-DD
     payment_source: PaymentSource;
     is_paid: boolean;
+    couple_id: string | null;
 }
 
 export interface RecurringExpense {
@@ -152,6 +154,7 @@ export interface RecurringExpense {
     last_generated_date: string | null; // YYYY-MM-DD
     is_active: boolean;
     google_calendar_event_id: string | null; // ID for the Google Calendar event
+    couple_id: string | null;
 }
 
 export interface BarChartData {
@@ -184,6 +187,7 @@ export interface MonthlyClosing {
     notes: string | null;
     goal_allocations: Record<string, number> | null;
     analysis: AIAnalysis | null;
+    couple_id: string | null;
 }
 
 export interface Goal {
@@ -194,6 +198,7 @@ export interface Goal {
     created_by: User;
     created_at: string;
     is_archived: boolean;
+    couple_id: string | null;
 }
 
 

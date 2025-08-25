@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '../utils/supabase';
 import { User, Expense, PaymentSource, RecurringExpense, MonthlyClosing, Goal, AIAnalysis, BarChartData, UserProfile } from '../types';
@@ -7,6 +8,7 @@ import { PAYMENT_SOURCES } from '../constants';
 import { Button, Input, Modal, SegmentedControl, CurrencyInput } from './UIComponents';
 import { PlusIcon, TrashIcon, CalendarIcon, PencilIcon, ArrowPathIcon, SparklesIcon, TargetIcon, CheckIcon, ChevronLeftIcon, ChevronRightIcon, HomeIcon, CreditCardIcon } from './Icons';
 import { Bar } from 'react-chartjs-2';
+import { GoogleGenAI, Type } from "@google/genai";
 import {
   Chart as ChartJS,
   ArcElement,
@@ -357,6 +359,10 @@ export const ExpensesApp: React.FC<ExpensesAppProps> = ({ currentUser, googleAut
     const [dataMigrationNeeded, setDataMigrationNeeded] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
 
+    // AI Quick Add State
+    const [quickAddText, setQuickAddText] = useState('');
+    const [isQuickAdding, setIsQuickAdding] = useState(false);
+
     const isGeneratingRef = useRef(false);
     const monthScrollerRef = useRef<HTMLDivElement>(null);
 
@@ -418,6 +424,64 @@ export const ExpensesApp: React.FC<ExpensesAppProps> = ({ currentUser, googleAut
     }, [currentUser.couple_id, fetchData]);
     
     // --- Data Handlers ---
+     const handleQuickAdd = async () => {
+        if (!quickAddText.trim() || !currentUser.couple_id) return;
+        setIsQuickAdding(true);
+
+        try {
+            const ai = new GoogleGenAI({apiKey: import.meta.env.VITE_GEMINI_API_KEY});
+            const today = new Date().toISOString().split('T')[0];
+
+            const schema = {
+                type: Type.OBJECT,
+                properties: {
+                    description: { type: Type.STRING, description: "A descrição da despesa." },
+                    amount: { type: Type.NUMBER, description: "O valor numérico da despesa." },
+                    payment_source: { type: Type.STRING, description: "A fonte de pagamento.", enum: PAYMENT_SOURCES },
+                    due_date: { type: Type.STRING, description: `A data de vencimento no formato YYYY-MM-DD. Se não for especificado, use a data de hoje: ${today}. Entenda termos relativos como 'ontem'.` },
+                },
+                required: ["description", "amount", "payment_source", "due_date"]
+            };
+
+            const prompt = `Analise o texto da despesa fornecido pelo usuário. Extraia as informações e retorne um objeto JSON. Texto do usuário: "${quickAddText}"`;
+
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: prompt,
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: schema,
+                },
+            });
+            
+            const expenseData = JSON.parse(response.text.trim());
+
+            if (!expenseData.description || typeof expenseData.amount !== 'number' || !expenseData.due_date || !expenseData.payment_source) {
+                 throw new Error("A IA não retornou todos os campos necessários.");
+            }
+            
+            const newExpense: Omit<Expense, 'id'> = {
+                description: expenseData.description,
+                amount: expenseData.amount,
+                due_date: expenseData.due_date,
+                payment_source: expenseData.payment_source,
+                is_paid: false,
+                couple_id: currentUser.couple_id,
+            };
+
+            const { error } = await supabase.from('expenses').insert([newExpense]);
+            if (error) throw error;
+            
+            setQuickAddText('');
+            await fetchData(currentUser.couple_id);
+
+        } catch (error) {
+            console.error("Error with AI Quick Add:", error);
+            alert(`Ocorreu um erro ao adicionar a despesa com a IA. Por favor, tente novamente ou adicione manualmente. Detalhes: ${(error as Error).message}`);
+        } finally {
+            setIsQuickAdding(false);
+        }
+    };
 
     const handleSaveExpense = async (data: Omit<Expense, 'id' | 'is_paid' | 'couple_id'>) => {
         const dataToSave = { ...data, couple_id: currentUser.couple_id };
@@ -605,6 +669,33 @@ export const ExpensesApp: React.FC<ExpensesAppProps> = ({ currentUser, googleAut
                  <Button onClick={() => handleScrollMonths('right')} variant="ghost" className="!p-2 !rounded-full absolute right-0 z-10 bg-white/50 hover:bg-white backdrop-blur-sm"><ChevronRightIcon className="w-6 h-6"/></Button>
             </div>
             
+             <div className="bg-white p-6 rounded-xl shadow-subtle">
+                <h3 className="text-xl font-bold text-dark flex items-center gap-2 mb-3">
+                    <SparklesIcon className="w-6 h-6 text-accent" />
+                    Entrada Rápida com IA
+                </h3>
+                <p className="text-sm text-slate-600 mb-4">
+                    Digite sua despesa em linguagem natural. Ex: "Jantar no Green Dog R$85,50 no cartão ontem".
+                </p>
+                <div className="flex gap-2">
+                    <Input
+                        value={quickAddText}
+                        onChange={(e) => setQuickAddText(e.target.value)}
+                        placeholder="Digite sua despesa..."
+                        disabled={isQuickAdding}
+                        onKeyDown={(e) => { if (e.key === 'Enter' && !isQuickAdding && quickAddText.trim()) handleQuickAdd(); }}
+                    />
+                    <Button onClick={handleQuickAdd} disabled={isQuickAdding || !quickAddText.trim()} variant="accent">
+                        {isQuickAdding ? (
+                            <ArrowPathIcon className="w-5 h-5 animate-spin" />
+                        ) : (
+                            <PlusIcon className="w-5 h-5" />
+                        )}
+                        <span>{isQuickAdding ? 'Adicionando...' : 'Adicionar'}</span>
+                    </Button>
+                </div>
+            </div>
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                  {/* Left Column: Expenses & Recurring */}
                 <div className="space-y-6">

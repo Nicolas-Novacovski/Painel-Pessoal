@@ -56,6 +56,8 @@ CREATE TABLE IF NOT EXISTS public.trips (
     travelers smallint NOT NULL DEFAULT 2,
     CONSTRAINT trips_pkey PRIMARY KEY (id)
 );
+-- Adiciona colunas se não existirem, para garantir compatibilidade com schemas antigos.
+ALTER TABLE public.trips ADD COLUMN IF NOT EXISTS checklist jsonb NULL;
 ALTER TABLE public.trips ADD COLUMN IF NOT EXISTS travelers smallint NOT NULL DEFAULT 2;
 ALTER TABLE public.trips DISABLE ROW LEVEL SECURITY;
 
