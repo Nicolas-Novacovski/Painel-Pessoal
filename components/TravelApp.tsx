@@ -257,7 +257,12 @@ const TravelApp: React.FC<TravelAppProps> = ({ currentUser }) => {
 
         } catch (error: any) {
             console.error("Error saving trip:", error);
-            alert(`Erro ao salvar viagem: ${error.message}`);
+            const msg = (error.message || '').toLowerCase();
+            if (msg.includes('column "checklist" does not exist') || msg.includes("could not find the 'checklist' column")) {
+                setDbError(true);
+            } else {
+                alert(`Erro ao salvar viagem: ${error.message}`);
+            }
         }
     };
 
