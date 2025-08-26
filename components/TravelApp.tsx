@@ -124,18 +124,22 @@ ALTER TABLE public.trip_gallery_items DISABLE ROW LEVEL SECURITY;
 -- --- CONFIGURAÇÃO DAS PERMISSÕES DO BUCKET DE IMAGENS ---
 -- Estas políticas garantem que o aplicativo possa fazer upload e exibir imagens.
 
+DROP POLICY IF EXISTS "Public Read for Trip Images" ON storage.objects;
 CREATE POLICY "Public Read for Trip Images"
 ON storage.objects FOR SELECT
 USING (bucket_id = 'trip-images');
 
+DROP POLICY IF EXISTS "Public Upload for Trip Images" ON storage.objects;
 CREATE POLICY "Public Upload for Trip Images"
 ON storage.objects FOR INSERT
 WITH CHECK (bucket_id = 'trip-images');
 
+DROP POLICY IF EXISTS "Public Update for Trip Images" ON storage.objects;
 CREATE POLICY "Public Update for Trip Images"
 ON storage.objects FOR UPDATE
 USING (bucket_id = 'trip-images');
 
+DROP POLICY IF EXISTS "Public Delete for Trip Images" ON storage.objects;
 CREATE POLICY "Public Delete for Trip Images"
 ON storage.objects FOR DELETE
 USING (bucket_id = 'trip-images');
