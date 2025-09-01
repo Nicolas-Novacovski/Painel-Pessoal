@@ -1,6 +1,4 @@
 
-
-
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '../utils/supabase';
 import { User, Expense, PaymentSource, RecurringExpense, MonthlyClosing, Goal, AIAnalysis, BarChartData, UserProfile } from '../types';
@@ -116,6 +114,7 @@ const DatabaseErrorResolver: React.FC<{ title: string; instructions: string; sql
 const ExpenseForm: React.FC<{ onSave: (data: Omit<Expense, 'id' | 'is_paid' | 'couple_id'>) => Promise<void>, onClose: () => void, initialData?: Expense, initialDate: Date }> = ({ onSave, onClose, initialData, initialDate }) => {
     const [description, setDescription] = useState(initialData?.description || '');
     const [amount, setAmount] = useState(initialData?.amount || 0);
+    const [amountToAdd, setAmountToAdd] = useState(0);
     const [dueDate, setDueDate] = useState(initialData?.due_date || initialDate.toISOString().split('T')[0]);
     const [paymentSource, setPaymentSource] = useState<PaymentSource>(initialData?.payment_source || 'Conta Pessoal');
     const [isSaving, setIsSaving] = useState(false);
@@ -133,11 +132,31 @@ const ExpenseForm: React.FC<{ onSave: (data: Omit<Expense, 'id' | 'is_paid' | 'c
             setIsSaving(false);
         }
     };
+    
+    const handleAddAmount = () => {
+        if (amountToAdd > 0) {
+            setAmount(prev => prev + amountToAdd);
+            setAmountToAdd(0);
+        }
+    };
 
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
             <Input autoFocus value={description} onChange={e => setDescription(e.target.value)} placeholder="Descrição da Despesa" required />
             <CurrencyInput value={amount} onValueChange={setAmount} placeholder="R$ 0,00" />
+            
+            {initialData && (
+                <div className="p-3 bg-slate-100 rounded-lg space-y-2 border">
+                    <label htmlFor="amount-to-add" className="font-medium text-sm text-slate-700">Adicionar valor a esta despesa</label>
+                    <div className="flex gap-2">
+                        <CurrencyInput id="amount-to-add" value={amountToAdd} onValueChange={setAmountToAdd} placeholder="R$ 0,00" />
+                        <Button type="button" variant="secondary" onClick={handleAddAmount} disabled={amountToAdd <= 0}>
+                            Adicionar
+                        </Button>
+                    </div>
+                </div>
+            )}
+
             <div className="grid grid-cols-2 gap-4">
                 <Input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} required />
                 <SegmentedControl value={paymentSource} onChange={val => setPaymentSource(val as PaymentSource)} options={PAYMENT_SOURCES.map(s => ({label: s, value: s}))} />
@@ -294,6 +313,8 @@ const RecurringExpenseForm: React.FC<{
 const MonthlyClosingForm: React.FC<{ onSave: (data: Omit<MonthlyClosing, 'id' | 'analysis' | 'couple_id'> & { analysis: AIAnalysis | null }) => void; onClose: () => void; initialData?: MonthlyClosing | null; goals: Goal[]; }> = ({ onSave, onClose, initialData, goals }) => {
     const [incomeNicolas, setIncomeNicolas] = useState(initialData?.income_nicolas || 0);
     const [incomeAna, setIncomeAna] = useState(initialData?.income_ana || 0);
+    const [nicolasIncomeToAdd, setNicolasIncomeToAdd] = useState(0);
+    const [anaIncomeToAdd, setAnaIncomeToAdd] = useState(0);
     const [notes, setNotes] = useState(initialData?.notes || '');
     const [goalAllocations, setGoalAllocations] = useState<Record<string, number>>(initialData?.goal_allocations || {});
     const [isSaving, setIsSaving] = useState(false);
@@ -311,13 +332,41 @@ const MonthlyClosingForm: React.FC<{ onSave: (data: Omit<MonthlyClosing, 'id' | 
         } catch (error: any) { alert(`Erro ao salvar fechamento: ${error.message}`); } finally { setIsSaving(false); }
     };
 
+    const handleAddIncomeNicolas = () => {
+        if (nicolasIncomeToAdd > 0) {
+            setIncomeNicolas(prev => prev + nicolasIncomeToAdd);
+            setNicolasIncomeToAdd(0);
+        }
+    };
+
+    const handleAddIncomeAna = () => {
+        if (anaIncomeToAdd > 0) {
+            setIncomeAna(prev => prev + anaIncomeToAdd);
+            setAnaIncomeToAdd(0);
+        }
+    };
+
     const totalAllocated = Object.values(goalAllocations).reduce((sum, val) => sum + val, 0);
 
     return (
         <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div> <label htmlFor="income-nicolas" className="font-medium text-slate-700 block mb-1">Renda (Nicolas)</label> <CurrencyInput id="income-nicolas" value={incomeNicolas} onValueChange={setIncomeNicolas} /> </div>
-                <div> <label htmlFor="income-ana" className="font-medium text-slate-700 block mb-1">Renda (Ana)</label> <CurrencyInput id="income-ana" value={incomeAna} onValueChange={setIncomeAna} /> </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                    <label htmlFor="income-nicolas" className="font-medium text-slate-700 block">Renda (Nicolas)</label>
+                    <CurrencyInput id="income-nicolas" value={incomeNicolas} onValueChange={setIncomeNicolas} />
+                    <div className="flex gap-2">
+                        <CurrencyInput id="income-nicolas-add" value={nicolasIncomeToAdd} onValueChange={setNicolasIncomeToAdd} placeholder="Adicionar valor" />
+                        <Button type="button" variant="secondary" onClick={handleAddIncomeNicolas} disabled={nicolasIncomeToAdd <= 0}>Add</Button>
+                    </div>
+                </div>
+                <div className="space-y-2">
+                    <label htmlFor="income-ana" className="font-medium text-slate-700 block">Renda (Ana)</label>
+                    <CurrencyInput id="income-ana" value={incomeAna} onValueChange={setIncomeAna} />
+                     <div className="flex gap-2">
+                        <CurrencyInput id="income-ana-add" value={anaIncomeToAdd} onValueChange={setAnaIncomeToAdd} placeholder="Adicionar valor" />
+                        <Button type="button" variant="secondary" onClick={handleAddIncomeAna} disabled={anaIncomeToAdd <= 0}>Add</Button>
+                    </div>
+                </div>
             </div>
             <div>
                 <h4 className="font-bold text-lg text-slate-800 mb-2">Distribuição para Metas</h4>
@@ -435,15 +484,37 @@ export const ExpensesApp: React.FC<ExpensesAppProps> = ({ currentUser, googleAut
             const schema = {
                 type: Type.OBJECT,
                 properties: {
-                    description: { type: Type.STRING, description: "A descrição da despesa." },
-                    amount: { type: Type.NUMBER, description: "O valor numérico da despesa." },
-                    payment_source: { type: Type.STRING, description: "A fonte de pagamento.", enum: PAYMENT_SOURCES },
-                    due_date: { type: Type.STRING, description: `A data de vencimento no formato YYYY-MM-DD. Se não for especificado, use a data de hoje: ${today}. Entenda termos relativos como 'ontem'.` },
+                    intent: { type: Type.STRING, enum: ['create', 'update'] },
+                    description: { type: Type.STRING, description: "For 'create': the full description. For 'update': the target expense's description." },
+                    amount: { type: Type.NUMBER, description: "For 'create': the total amount. For 'update': the amount to ADD." },
+                    payment_source: { type: Type.STRING, description: "For 'create': the payment source.", enum: PAYMENT_SOURCES, nullable: true },
+                    due_date: { type: Type.STRING, description: `For 'create': the due date (YYYY-MM-DD). Use today: ${today} if not specified.`, nullable: true },
                 },
-                required: ["description", "amount", "payment_source", "due_date"]
+                required: ["intent", "description", "amount"]
             };
 
-            const prompt = `Analise o texto da despesa fornecido pelo usuário. Extraia as informações e retorne um objeto JSON. Texto do usuário: "${quickAddText}"`;
+            const prompt = `
+            Analyze the user's text about an expense. Your primary goal is to determine the user's INTENT: are they CREATING a new expense or UPDATING an existing one?
+
+            - If the text contains keywords like "add", "adicionar a", "somar na despesa", the INTENT is 'update'.
+            - Otherwise, the INTENT is 'create'.
+
+            Based on the intent, extract the following information and return a single JSON object.
+
+            User's text: "${quickAddText}"
+
+            - For INTENT 'create':
+            - "description": The full description of the new expense.
+            - "amount": The total amount of the expense.
+            - "payment_source": The source. Must be one of ${PAYMENT_SOURCES.join(', ')}. If not mentioned, default to 'Conta Pessoal'.
+            - "due_date": The due date (YYYY-MM-DD). Use today's date (${today}) if not specified.
+
+            - For INTENT 'update':
+            - "description": The name/description of the expense to find and update.
+            - "amount": The numeric value to ADD to the existing expense's amount.
+            - "payment_source": null
+            - "due_date": null
+            `;
 
             const response = await ai.models.generateContent({
                 model: 'gemini-2.5-flash',
@@ -456,21 +527,42 @@ export const ExpensesApp: React.FC<ExpensesAppProps> = ({ currentUser, googleAut
             
             const expenseData = JSON.parse(response.text.trim());
 
-            if (!expenseData.description || typeof expenseData.amount !== 'number' || !expenseData.due_date || !expenseData.payment_source) {
-                 throw new Error("A IA não retornou todos os campos necessários.");
-            }
-            
-            const newExpense: Omit<Expense, 'id'> = {
-                description: expenseData.description,
-                amount: expenseData.amount,
-                due_date: expenseData.due_date,
-                payment_source: expenseData.payment_source,
-                is_paid: false,
-                couple_id: currentUser.couple_id,
-            };
+            if (expenseData.intent === 'update') {
+                const monthExpenses = expenses.filter(e => {
+                    const d = new Date(e.due_date + 'T12:00:00Z');
+                    return d.getFullYear() === selectedDate.getFullYear() && d.getMonth() === selectedDate.getMonth();
+                });
 
-            const { error } = await supabase.from('expenses').insert([newExpense]);
-            if (error) throw error;
+                const targetDescription = expenseData.description.toLowerCase();
+                const foundExpense = monthExpenses
+                    .filter(e => e.description.toLowerCase().includes(targetDescription))
+                    .sort((a, b) => new Date(b.due_date!).getTime() - new Date(a.due_date!).getTime())
+                    [0];
+
+                if (foundExpense) {
+                    const newAmount = foundExpense.amount + expenseData.amount;
+                    const { error } = await supabase.from('expenses').update({ amount: newAmount }).eq('id', foundExpense.id);
+                    if (error) throw error;
+                } else {
+                    throw new Error(`Não foi encontrada uma despesa com a descrição "${expenseData.description}" para este mês. Tente criar uma nova.`);
+                }
+            } else { // intent === 'create'
+                if (!expenseData.description || typeof expenseData.amount !== 'number') {
+                    throw new Error("A IA não retornou todos os campos necessários para criar a despesa.");
+                }
+                
+                const newExpense: Omit<Expense, 'id'> = {
+                    description: expenseData.description,
+                    amount: expenseData.amount,
+                    due_date: expenseData.due_date || today,
+                    payment_source: expenseData.payment_source || 'Conta Pessoal',
+                    is_paid: false,
+                    couple_id: currentUser.couple_id,
+                };
+
+                const { error } = await supabase.from('expenses').insert([newExpense]);
+                if (error) throw error;
+            }
             
             setQuickAddText('');
             await fetchData(currentUser.couple_id);
