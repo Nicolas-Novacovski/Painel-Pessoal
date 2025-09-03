@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '../utils/supabase';
 import { User, Expense, PaymentSource, RecurringExpense, MonthlyClosing, Goal, AIAnalysis, BarChartData, UserProfile } from '../types';
@@ -37,6 +38,7 @@ ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS couple_id TEXT NULL;
 ALTER TABLE public.recurring_expenses ADD COLUMN IF NOT EXISTS couple_id TEXT NULL;
 ALTER TABLE public.goals ADD COLUMN IF NOT EXISTS couple_id TEXT NULL;
 ALTER TABLE public.monthly_closings ADD COLUMN IF NOT EXISTS couple_id TEXT NULL;
+ALTER TABLE public.monthly_closings ADD COLUMN IF NOT EXISTS card_limit NUMERIC NULL;
 
 -- 2. Atualiza a restrição de unicidade para fechamentos mensais.
 DO $$
@@ -317,6 +319,7 @@ const MonthlyClosingForm: React.FC<{ onSave: (data: Omit<MonthlyClosing, 'id' | 
     const [anaIncomeToAdd, setAnaIncomeToAdd] = useState(0);
     const [notes, setNotes] = useState(initialData?.notes || '');
     const [goalAllocations, setGoalAllocations] = useState<Record<string, number>>(initialData?.goal_allocations || {});
+    const [cardLimit, setCardLimit] = useState(initialData?.card_limit || 0);
     const [isSaving, setIsSaving] = useState(false);
 
     const handleAllocationChange = (goalId: string, value: number) => {
@@ -327,7 +330,7 @@ const MonthlyClosingForm: React.FC<{ onSave: (data: Omit<MonthlyClosing, 'id' | 
         e.preventDefault();
         setIsSaving(true);
         try {
-            await onSave({ month_year: initialData?.month_year || '', income_nicolas: incomeNicolas, income_ana: incomeAna, notes, goal_allocations: goalAllocations, shared_goal: null, analysis: initialData?.analysis || null, });
+            await onSave({ month_year: initialData?.month_year || '', income_nicolas: incomeNicolas, income_ana: incomeAna, notes, goal_allocations: goalAllocations, shared_goal: null, analysis: initialData?.analysis || null, card_limit: cardLimit });
             onClose();
         } catch (error: any) { alert(`Erro ao salvar fechamento: ${error.message}`); } finally { setIsSaving(false); }
     };
@@ -367,6 +370,10 @@ const MonthlyClosingForm: React.FC<{ onSave: (data: Omit<MonthlyClosing, 'id' | 
                         <Button type="button" variant="secondary" onClick={handleAddIncomeAna} disabled={anaIncomeToAdd <= 0}>Add</Button>
                     </div>
                 </div>
+            </div>
+             <div>
+                <label htmlFor="card-limit" className="font-medium text-slate-700 block">Limite do Cartão de Crédito</label>
+                <CurrencyInput id="card-limit" value={cardLimit} onValueChange={setCardLimit} />
             </div>
             <div>
                 <h4 className="font-bold text-lg text-slate-800 mb-2">Distribuição para Metas</h4>
@@ -746,6 +753,15 @@ export const ExpensesApp: React.FC<ExpensesAppProps> = ({ currentUser, googleAut
     if (isLoading) {
         return <div className="text-center p-8">Carregando planejamento...</div>;
     }
+
+    const cardLimit = monthlyClosing?.card_limit || 0;
+    const cardUsagePercentage = cardLimit > 0 ? Math.min((cardTotal / cardLimit) * 100, 100) : 0;
+    let cardProgressBarColor = 'bg-green-500';
+    if (cardUsagePercentage > 90) {
+        cardProgressBarColor = 'bg-red-500';
+    } else if (cardUsagePercentage > 75) {
+        cardProgressBarColor = 'bg-yellow-500';
+    }
     
     return (
         <div className="container mx-auto p-4 sm:p-6 space-y-6">
@@ -860,6 +876,26 @@ export const ExpensesApp: React.FC<ExpensesAppProps> = ({ currentUser, googleAut
                             <div className="flex justify-between"><span className="text-slate-600">Renda Total:</span><span className="font-bold text-green-600">{formatCurrency((monthlyClosing?.income_nicolas || 0) + (monthlyClosing?.income_ana || 0))}</span></div>
                             <div className="flex justify-between"><span className="text-slate-600">Total Despesas:</span><span className="font-bold text-red-600">{formatCurrency(personalTotal)}</span></div>
                             <div className="flex justify-between border-t pt-2 mt-2"><span className="font-bold">Saldo Final:</span><span className="font-bold text-blue-600">{formatCurrency((monthlyClosing?.income_nicolas || 0) + (monthlyClosing?.income_ana || 0) - personalTotal)}</span></div>
+                        </div>
+                    </div>
+                     <div className="bg-white p-6 rounded-xl shadow-subtle">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-xl font-bold text-dark">Fechamento do Cartão</h3>
+                            <Button variant="secondary" onClick={() => setModal('closing')}><PencilIcon className="w-4 h-4"/> Editar Limite</Button>
+                        </div>
+                        <div className="space-y-3">
+                             <div className="w-full bg-slate-200 rounded-full h-4">
+                                <div
+                                    className={`h-4 rounded-full transition-all duration-500 ${cardProgressBarColor}`}
+                                    style={{ width: `${cardUsagePercentage}%` }}
+                                ></div>
+                            </div>
+                            <div className="flex justify-between text-sm"><span>Total Gasto:</span><span className="font-bold">{formatCurrency(cardTotal)}</span></div>
+                            <div className="flex justify-between text-sm"><span>Limite:</span><span className="font-semibold">{formatCurrency(cardLimit)}</span></div>
+                            <div className="flex justify-between text-base border-t pt-2 mt-2">
+                                <span className="font-bold">Saldo Restante:</span>
+                                <span className="font-bold text-blue-600">{formatCurrency(cardLimit - cardTotal)}</span>
+                            </div>
                         </div>
                     </div>
                 </div>

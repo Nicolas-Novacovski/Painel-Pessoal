@@ -421,6 +421,7 @@ export interface Database {
           goal_allocations: Json | null;
           analysis: Json | null;
           couple_id: string | null;
+          card_limit: number | null;
         };
         Insert: {
           id?: string;
@@ -433,6 +434,7 @@ export interface Database {
           goal_allocations?: Json | null;
           analysis?: Json | null;
           couple_id?: string | null;
+          card_limit?: number | null;
         };
         Update: {
           id?: string;
@@ -445,6 +447,7 @@ export interface Database {
           goal_allocations?: Json | null;
           analysis?: Json | null;
           couple_id?: string | null;
+          card_limit?: number | null;
         };
       };
       goals: {

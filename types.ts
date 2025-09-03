@@ -188,6 +188,7 @@ export interface MonthlyClosing {
     goal_allocations: Record<string, number> | null;
     analysis: AIAnalysis | null;
     couple_id: string | null;
+    card_limit: number | null;
 }
 
 export interface Goal {
