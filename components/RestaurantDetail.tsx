@@ -1,12 +1,76 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Restaurant, Review, User, Location, Memory, DatePlan, UserProfile } from '../types';
 import { averageRating, slugify, compressImage } from '../utils/helpers';
-import { MapPinIcon, StarIcon, TrashIcon, UberIcon, PencilIcon, GoogleIcon, CameraIcon, PlusIcon, XMarkIcon, PlayIcon, HeartIcon, TagIcon, SparklesIcon, ChevronDownIcon, ArrowPathIcon, CheckIcon } from './Icons';
+import { MapPinIcon, StarIcon, TrashIcon, UberIcon, PencilIcon, GoogleIcon, CameraIcon, PlusIcon, XMarkIcon, PlayIcon, HeartIcon, TagIcon, SparklesIcon, ChevronDownIcon, ArrowPathIcon, CheckIcon, HomeIcon, RouteIcon } from './Icons';
 import { Button, PriceRatingDisplay, StarRatingDisplay, StarRatingInput, Modal, Input, PriceRatingInput } from './UIComponents';
 import DatePlannerForm from './DatePlannerForm';
 import { supabase } from '../utils/supabase';
 import { USERS } from '../constants';
 import { GoogleGenAI } from "@google/genai";
+import L from 'leaflet';
+
+// --- Interactive Map Component ---
+const InteractiveMap: React.FC<{
+    restaurantLocation: Location | null;
+    userLocation: { lat: number; lng: number } | null;
+    showHome: boolean;
+}> = ({ restaurantLocation, userLocation, showHome }) => {
+    const mapContainerRef = useRef<HTMLDivElement>(null);
+    const mapRef = useRef<L.Map | null>(null);
+    const markersRef = useRef<L.FeatureGroup | null>(null);
+
+    // Initialize map
+    useEffect(() => {
+        if (mapRef.current === null && mapContainerRef.current) {
+            mapRef.current = L.map(mapContainerRef.current, { scrollWheelZoom: false });
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{y}/{png}', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }).addTo(mapRef.current);
+            markersRef.current = L.featureGroup().addTo(mapRef.current);
+
+            setTimeout(() => mapRef.current?.invalidateSize(), 300);
+        }
+    }, []);
+
+    // Update markers and view
+    useEffect(() => {
+        const map = mapRef.current;
+        const markers = markersRef.current;
+        if (!map || !markers) return;
+
+        markers.clearLayers();
+        const bounds = L.latLngBounds([]);
+        
+        const restaurantIconHtml = `<div style="background-color: #0284c7; border-radius: 9999px; padding: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="white" style="width: 20px; height: 20px;"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 21v-7.5c0-.621-.504-1.125-1.125-1.125h-2.25c.621 0 1.125.504 1.125 1.125V21M3 6.375c0-.621.504-1.125 1.125-1.125h15.75c.621 0 1.125.504 1.125 1.125v10.5A2.25 2.25 0 0 1 18.75 21H5.25A2.25 2.25 0 0 1 3 18.75V6.375z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 21a2.25 2.25 0 0 0 2.25-2.25v-1.125c0-.621-.504-1.125-1.125-1.125-2.254 0-4.49-1.21-6.096-3.132-1.606-1.922-3.23-1.922-4.836 0-1.606 1.922-3.842 3.132-6.096 3.132C3.504 16.5 3 17.004 3 17.625v1.125c0 1.242 1.008 2.25 2.25 2.25h14.25zM12 18.75h.008v.008H12v-.008z" /></svg></div>`;
+        const homeIconHtml = `<div style="background-color: #ec4899; border-radius: 9999px; padding: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="white" style="width: 20px; height: 20px;"><path stroke-linecap="round" stroke-linejoin="round" d="m2.25 12 8.955-8.955a1.125 1.125 0 0 1 1.59 0L21.75 12" /><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h7.5" /></svg></div>`;
+
+        const restaurantIcon = L.divIcon({ html: restaurantIconHtml, className: 'bg-transparent border-none', iconSize: [32, 32], iconAnchor: [16, 32], popupAnchor: [0, -32] });
+        const homeIcon = L.divIcon({ html: homeIconHtml, className: 'bg-transparent border-none', iconSize: [32, 32], iconAnchor: [16, 32], popupAnchor: [0, -32] });
+
+        if (restaurantLocation?.latitude && restaurantLocation?.longitude) {
+            const restaurantLatLng = L.latLng(restaurantLocation.latitude, restaurantLocation.longitude);
+            L.marker(restaurantLatLng, { icon: restaurantIcon }).bindTooltip("Restaurante").addTo(markers);
+            bounds.extend(restaurantLatLng);
+        }
+
+        if (showHome && userLocation) {
+            const userLatLng = L.latLng(userLocation.lat, userLocation.lng);
+            L.marker(userLatLng, { icon: homeIcon }).bindTooltip("Sua Casa").addTo(markers);
+            bounds.extend(userLatLng);
+        }
+
+        if (bounds.isValid()) {
+            map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
+        } else if (restaurantLocation?.latitude && restaurantLocation?.longitude) {
+            map.setView([restaurantLocation.latitude, restaurantLocation.longitude], 15);
+        } else {
+            map.setView([-25.4284, -49.2733], 13);
+        }
+    }, [restaurantLocation, userLocation, showHome]);
+
+    return <div ref={mapContainerRef} className="h-60 w-full bg-slate-200 rounded-lg overflow-hidden border border-slate-300 z-0" />;
+};
+
 
 interface RestaurantDetailProps {
     restaurant: Restaurant & { is_favorited: boolean };
@@ -31,6 +95,7 @@ export const RestaurantDetail: React.FC<RestaurantDetailProps> = ({ restaurant, 
     const [selectedLocation, setSelectedLocation] = useState<Location | null>(restaurant.locations?.[0] || null);
     const [copyStatus, setCopyStatus] = useState<'idle' | 'copying' | 'copied'>('idle');
     const [isGeocoding, setIsGeocoding] = useState<string | null>(null);
+    const [showHome, setShowHome] = useState(false);
 
     // Google Rating State
     const [isEditingGoogleRating, setIsEditingGoogleRating] = useState(false);
@@ -58,6 +123,8 @@ export const RestaurantDetail: React.FC<RestaurantDetailProps> = ({ restaurant, 
     const [editingMonth, setEditingMonth] = useState(1);
     const [editingYear, setEditingYear] = useState(new Date().getFullYear());
 
+    const userHasLocation = !!currentUser.latitude && !!currentUser.longitude;
+    const userLocation = userHasLocation ? { lat: currentUser.latitude!, lng: currentUser.longitude! } : null;
 
     const partner = useMemo(() => USERS.find(u => u !== currentUser.name && u !== 'Visitante'), [currentUser.name]);
 
@@ -343,6 +410,12 @@ export const RestaurantDetail: React.FC<RestaurantDetailProps> = ({ restaurant, 
             setCopyStatus('idle');
         }
     };
+
+    const handleDirections = () => {
+        if (!userLocation || !selectedLocation?.latitude || !selectedLocation?.longitude) return;
+        const url = `https://www.google.com/maps/dir/?api=1&origin=${userLocation.lat},${userLocation.lng}&destination=${selectedLocation.latitude},${selectedLocation.longitude}&travelmode=driving`;
+        window.open(url, '_blank');
+    };
     
     const handleFetchPromotions = useCallback(async () => {
         setIsFetchingPromotions(true);
@@ -390,18 +463,6 @@ Se nenhuma promoção ativa for encontrada, retorne APENAS a frase: "Nenhuma pro
 
 
     const calculatedAverageRating = averageRating(restaurant.reviews);
-    
-    const mapSrc = useMemo(() => {
-        if (!selectedLocation) {
-            return `https://maps.google.com/maps?q=Curitiba,+PR&t=&z=12&ie=UTF8&iwloc=&output=embed`;
-        }
-        if (selectedLocation.latitude && selectedLocation.longitude) {
-            return `https://maps.google.com/maps?q=${selectedLocation.latitude},${selectedLocation.longitude}&t=&z=15&ie=UTF8&iwloc=&output=embed`;
-        }
-        // Append city and state to the address for better accuracy.
-        const fullAddress = `${selectedLocation.address}, Curitiba, PR`;
-        return `https://maps.google.com/maps?q=${encodeURIComponent(fullAddress)}&t=&z=15&ie=UTF8&iwloc=&output=embed`;
-    }, [selectedLocation]);
 
     const getMemoryButtonText = () => {
         if(isSavingMemory) return 'Salvando...';
@@ -424,17 +485,25 @@ Se nenhuma promoção ativa for encontrada, retorne APENAS a frase: "Nenhuma pro
     return (
         <>
             <div className="space-y-6">
-                <div className="h-60 w-full bg-slate-200 rounded-lg overflow-hidden border border-slate-300">
-                    <iframe
-                        key={mapSrc}
-                        title={`Mapa para ${restaurant.name}`}
-                        width="100%"
-                        height="100%"
-                        style={{ border: 0 }}
-                        loading="lazy"
-                        allowFullScreen
-                        src={mapSrc}>
-                    </iframe>
+                <div className="relative">
+                    <InteractiveMap 
+                        restaurantLocation={selectedLocation}
+                        userLocation={userLocation}
+                        showHome={showHome}
+                    />
+                    <div className="absolute top-3 right-3 z-[500] flex flex-col gap-2">
+                        {userHasLocation && (
+                            <Button 
+                                variant={showHome ? 'primary' : 'secondary'}
+                                size="sm"
+                                onClick={() => setShowHome(!showHome)}
+                                className="!p-2 shadow-lg !bg-white/80 hover:!bg-white"
+                                title={showHome ? "Ocultar minha casa" : "Mostrar minha casa no mapa"}
+                            >
+                                <HomeIcon className={`w-5 h-5 ${showHome ? 'text-primary' : 'text-slate-600'}`}/>
+                            </Button>
+                        )}
+                    </div>
                 </div>
                 
                 <div className="space-y-2">
@@ -469,6 +538,12 @@ Se nenhuma promoção ativa for encontrada, retorne APENAS a frase: "Nenhuma pro
                          <UberIcon className="w-5 h-5"/>
                          {getUberButtonText()}
                     </Button>
+                    {userHasLocation && (
+                        <Button onClick={handleDirections} disabled={!selectedLocation?.latitude} variant="secondary" className="flex-1">
+                            <RouteIcon className="w-5 h-5"/>
+                            Ver Rota (Google)
+                        </Button>
+                    )}
                     <Button onClick={() => setIsDatePlannerOpen(true)} variant="accent" className="flex-1">
                         <HeartIcon className="w-5 h-5"/>
                         Propor um Date
