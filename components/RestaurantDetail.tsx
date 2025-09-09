@@ -23,7 +23,7 @@ const InteractiveMap: React.FC<{
     useEffect(() => {
         if (mapRef.current === null && mapContainerRef.current) {
             mapRef.current = L.map(mapContainerRef.current, { scrollWheelZoom: false });
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{y}/{png}', {
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             }).addTo(mapRef.current);
             markersRef.current = L.featureGroup().addTo(mapRef.current);
