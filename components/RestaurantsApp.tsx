@@ -917,7 +917,6 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser, onProfileU
                             <AchievementsMap 
                                 restaurants={filteredAndSortedRestaurants} 
                                 onSelectRestaurant={(r) => setModalContent(r)}
-                                homeLocation={currentUser.latitude && currentUser.longitude ? { lat: currentUser.latitude, lng: currentUser.longitude } : null}
                             />
                         )}
 

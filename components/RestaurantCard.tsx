@@ -160,16 +160,7 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = ({ restaurant, onSe
                         )}
                     </div>
                     <div className="flex items-center mt-3 text-slate-600">
-                        <div className="flex-shrink-0 mr-1.5">
-                            {restaurant.locations && restaurant.locations.length > 1 ? (
-                                <div className="flex items-center" title={`${restaurant.locations.length} unidades`}>
-                                    <MapPinIcon className="w-4 h-4 text-primary z-10" />
-                                    <MapPinIcon className="w-4 h-4 text-slate-400 -ml-2" />
-                                </div>
-                            ) : (
-                                <MapPinIcon className="w-4 h-4" />
-                            )}
-                        </div>
+                        <MapPinIcon className="w-4 h-4 flex-shrink-0 mr-1.5" />
                         <p className="text-sm truncate flex-grow">
                             {primaryLocation}
                             {restaurant.city !== 'Curitiba' && <span className="font-bold"> - {restaurant.city}</span>}

@@ -57,6 +57,11 @@ export const RestaurantDetail: React.FC<RestaurantDetailProps> = ({ restaurant, 
     const [isEditingDate, setIsEditingDate] = useState(false);
     const [editingMonth, setEditingMonth] = useState(1);
     const [editingYear, setEditingYear] = useState(new Date().getFullYear());
+    
+    // Location State
+    const [selectedLocationIndex, setSelectedLocationIndex] = useState(0);
+    const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
+    const locationPickerRef = useRef<HTMLDivElement>(null);
 
     const partner = useMemo(() => USERS.find(u => u !== currentUser.name && u !== 'Visitante'), [currentUser.name]);
 
@@ -108,7 +113,18 @@ export const RestaurantDetail: React.FC<RestaurantDetailProps> = ({ restaurant, 
         const existingReview = restaurant.reviews.find(r => r.user === currentUser.name);
         setRating(existingReview?.rating || 0);
         setComment(existingReview?.comment || '');
+        setSelectedLocationIndex(0); // Reset location when restaurant changes
     }, [restaurant, currentUser.name]);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (locationPickerRef.current && !locationPickerRef.current.contains(event.target as Node)) {
+                setIsLocationPickerOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     const handleReviewSubmit = async () => {
         if(rating > 0) {
@@ -315,7 +331,7 @@ export const RestaurantDetail: React.FC<RestaurantDetailProps> = ({ restaurant, 
         }
     };
 
-    const primaryLocationAddress = restaurant.locations?.[0]?.address;
+    const primaryLocationAddress = restaurant.locations?.[selectedLocationIndex]?.address;
 
     const handleNavigate = async () => {
         if (!primaryLocationAddress) {
@@ -403,6 +419,29 @@ Se nenhuma promoção ativa for encontrada, retorne APENAS a frase: "Nenhuma pro
     return (
         <>
             <div className="space-y-6">
+                 {restaurant.locations && restaurant.locations.length > 1 && (
+                    <div className="relative" ref={locationPickerRef}>
+                        <label className="font-bold text-dark mb-2 block">Endereços ({restaurant.locations.length})</label>
+                        <button onClick={() => setIsLocationPickerOpen(!isLocationPickerOpen)} className="w-full bg-slate-100 p-3 rounded-lg text-left flex justify-between items-center border hover:border-slate-300 transition-colors">
+                            <span className="truncate pr-2">{primaryLocationAddress || 'Selecione um endereço'}</span>
+                            <ChevronDownIcon className={`w-5 h-5 text-slate-500 transition-transform flex-shrink-0 ${isLocationPickerOpen ? 'rotate-180' : ''}`} />
+                        </button>
+                        {isLocationPickerOpen && (
+                            <div className="absolute top-full mt-1 w-full bg-white border rounded-lg shadow-lg z-10 animate-fade-in py-1">
+                                {restaurant.locations.map((loc, index) => (
+                                    <button
+                                        key={index}
+                                        onClick={() => { setSelectedLocationIndex(index); setIsLocationPickerOpen(false); }}
+                                        className={`w-full text-left p-3 hover:bg-slate-100 transition-colors ${index === selectedLocationIndex ? 'font-bold text-primary' : ''}`}
+                                    >
+                                        {loc.address}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                 )}
+
                  {primaryLocationAddress && (
                     <div className="h-60 w-full bg-slate-200 rounded-lg overflow-hidden border border-slate-300">
                         <iframe
