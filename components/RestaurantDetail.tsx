@@ -65,23 +65,29 @@ const InteractiveMap: React.FC<{
             const control = (L as any).Routing.control({
                 waypoints: [userLatLng, restaurantLatLng],
                 routeWhileDragging: false,
-                show: false, // Oculta o painel de instruções
-                addWaypoints: false, // Previne que o usuário adicione pontos
-                draggableWaypoints: false, // Previne que o usuário arraste os pontos
+                show: false,
+                addWaypoints: false,
+                draggableWaypoints: false,
                 lineOptions: {
                     styles: [{ color: '#0284c7', opacity: 0.8, weight: 6 }]
                 },
-                createMarker: () => null // Previne a criação dos marcadores padrão feios
+                createMarker: () => null
             }).addTo(map);
 
             routeControlRef.current = control;
+            
+            // FIX: Fit bounds to show both markers and the route
+            const bounds = markers.getBounds();
+            if (bounds.isValid()) {
+                map.fitBounds(bounds, { padding: [50, 50] });
+            }
 
         } else if (hasRestaurantCoords) {
             const restaurantLatLng = L.latLng(restaurantLocation!.latitude!, restaurantLocation!.longitude!);
             L.marker(restaurantLatLng, { icon: restaurantIcon }).addTo(markers);
             map.setView(restaurantLatLng, 15);
         } else {
-             map.setView([-25.4284, -49.2733], 13); // Posição padrão para Curitiba
+             map.setView([-25.4284, -49.2733], 13);
         }
         
     }, [restaurantLocation, userLocation, showHome]);
@@ -522,27 +528,32 @@ Se nenhuma promoção ativa for encontrada, retorne APENAS a frase: "Nenhuma pro
                 <div className="space-y-2">
                     <h4 className="font-bold text-lg text-slate-800">Endereços</h4>
                     <div className="flex flex-wrap gap-2">
-                        {restaurant.locations?.map((loc, index) => (
-                            <div key={index} className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg group">
-                                <button 
-                                    onClick={() => setSelectedLocation(loc)}
-                                    className={`flex items-center gap-2 text-left px-2 py-1 rounded-md transition-colors w-full ${selectedLocation?.address === loc.address ? 'bg-primary/20' : 'hover:bg-slate-200'}`}
-                                >
-                                    <MapPinIcon className={`w-5 h-5 flex-shrink-0 ${selectedLocation?.address === loc.address ? 'text-primary' : 'text-slate-500'}`} />
-                                    <span className="text-sm font-medium text-slate-700">{loc.address}</span>
-                                </button>
-                                <Button
-                                    variant="ghost" 
-                                    size="sm"
-                                    className="!p-1.5"
-                                    onClick={() => handleRefreshLocation(loc)}
-                                    disabled={isGeocoding === loc.address}
-                                    title="Atualizar coordenadas (geocoding)"
-                                >
-                                    <ArrowPathIcon className={`w-4 h-4 ${isGeocoding === loc.address ? 'animate-spin' : 'group-hover:text-primary'}`} />
-                                </Button>
-                            </div>
-                        ))}
+                        {restaurant.locations?.map((loc, index) => {
+                             const hasCoords = loc.latitude && loc.longitude;
+                             return (
+                                <div key={index} className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg group">
+                                    <button 
+                                        onClick={() => setSelectedLocation(loc)}
+                                        className={`flex items-center gap-2 text-left px-2 py-1 rounded-md transition-colors w-full ${selectedLocation?.address === loc.address ? 'bg-primary/20' : 'hover:bg-slate-200'}`}
+                                    >
+                                         <MapPinIcon className={`w-5 h-5 flex-shrink-0 ${selectedLocation?.address === loc.address ? 'text-primary' : (hasCoords ? 'text-slate-500' : 'text-red-400')}`} title={!hasCoords ? "Coordenadas ausentes" : ""} />
+                                        <span className="text-sm font-medium text-slate-700">{loc.address}</span>
+                                    </button>
+                                    {!hasCoords && (
+                                        <Button
+                                            variant="ghost" 
+                                            size="sm"
+                                            className="!p-1.5"
+                                            onClick={() => handleRefreshLocation(loc)}
+                                            disabled={isGeocoding === loc.address}
+                                            title="Buscar coordenadas com IA"
+                                        >
+                                            <ArrowPathIcon className={`w-4 h-4 ${isGeocoding === loc.address ? 'animate-spin' : 'text-red-500 group-hover:text-primary'}`} />
+                                        </Button>
+                                    )}
+                                </div>
+                             )
+                        })}
                     </div>
                 </div>
 
