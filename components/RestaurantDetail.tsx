@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Restaurant, Review, User, Location, Memory, DatePlan, UserProfile } from '../types';
-import { averageRating, slugify, compressImage } from '../utils/helpers';
+import { averageRating, slugify, compressImage, extractNeighborhood } from '../utils/helpers';
 import { MapPinIcon, StarIcon, TrashIcon, UberIcon, PencilIcon, GoogleIcon, CameraIcon, PlusIcon, XMarkIcon, PlayIcon, HeartIcon, TagIcon, SparklesIcon, ChevronDownIcon, CheckIcon } from './Icons';
 // FIX: Added 'PriceRatingInput' to the import from UIComponents to resolve the 'Cannot find name' error.
 import { Button, PriceRatingDisplay, StarRatingDisplay, StarRatingInput, Modal, Input, PriceRatingInput } from './UIComponents';
@@ -422,21 +422,36 @@ Se nenhuma promoção ativa for encontrada, retorne APENAS a frase: "Nenhuma pro
                  {restaurant.locations && restaurant.locations.length > 1 && (
                     <div className="relative" ref={locationPickerRef}>
                         <label className="font-bold text-dark mb-2 block">Endereços ({restaurant.locations.length})</label>
-                        <button onClick={() => setIsLocationPickerOpen(!isLocationPickerOpen)} className="w-full bg-slate-100 p-3 rounded-lg text-left flex justify-between items-center border hover:border-slate-300 transition-colors">
-                            <span className="truncate pr-2">{primaryLocationAddress || 'Selecione um endereço'}</span>
+                        <button onClick={() => setIsLocationPickerOpen(!isLocationPickerOpen)} className="w-full bg-white p-3 rounded-lg text-left flex justify-between items-center border-2 border-slate-200 hover:border-primary transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50">
+                             <div className="flex items-center gap-3 min-w-0">
+                                <MapPinIcon className="w-5 h-5 text-slate-400 flex-shrink-0" />
+                                <span className="truncate pr-2 text-dark font-medium">{primaryLocationAddress || 'Selecione um endereço'}</span>
+                            </div>
                             <ChevronDownIcon className={`w-5 h-5 text-slate-500 transition-transform flex-shrink-0 ${isLocationPickerOpen ? 'rotate-180' : ''}`} />
                         </button>
                         {isLocationPickerOpen && (
-                            <div className="absolute top-full mt-1 w-full bg-white border rounded-lg shadow-lg z-10 animate-fade-in py-1">
-                                {restaurant.locations.map((loc, index) => (
-                                    <button
-                                        key={index}
-                                        onClick={() => { setSelectedLocationIndex(index); setIsLocationPickerOpen(false); }}
-                                        className={`w-full text-left p-3 hover:bg-slate-100 transition-colors ${index === selectedLocationIndex ? 'font-bold text-primary' : ''}`}
-                                    >
-                                        {loc.address}
-                                    </button>
-                                ))}
+                            <div className="absolute top-full mt-2 w-full bg-white border border-slate-200 rounded-lg shadow-xl z-10 animate-fade-in py-2">
+                                {restaurant.locations.map((loc, index) => {
+                                    const neighborhood = extractNeighborhood(loc.address);
+                                    return (
+                                        <button
+                                            key={index}
+                                            onClick={() => { setSelectedLocationIndex(index); setIsLocationPickerOpen(false); }}
+                                            className={`w-full text-left p-3 hover:bg-primary/5 transition-colors flex justify-between items-center ${index === selectedLocationIndex ? 'bg-primary/5' : ''}`}
+                                        >
+                                            <div className="flex items-start gap-3">
+                                                 <MapPinIcon className={`w-5 h-5 mt-1 flex-shrink-0 ${index === selectedLocationIndex ? 'text-primary' : 'text-slate-400'}`} />
+                                                 <div>
+                                                    <p className={`font-medium ${index === selectedLocationIndex ? 'text-primary' : 'text-dark'}`}>{loc.address}</p>
+                                                    {neighborhood && <p className="text-sm text-slate-500">{neighborhood}</p>}
+                                                 </div>
+                                            </div>
+                                            {index === selectedLocationIndex && (
+                                                <CheckIcon className="w-5 h-5 text-primary flex-shrink-0 ml-4" />
+                                            )}
+                                        </button>
+                                    );
+                                })}
                             </div>
                         )}
                     </div>
