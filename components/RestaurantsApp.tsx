@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Restaurant, Review, User, RestaurantCategory, Memory, DatePlan, UserProfile, CuratedList, Location } from '../types';
 import { RESTAURANT_CATEGORIES, ADMIN_COUPLE_EMAILS, USERS } from '../constants';
@@ -430,48 +431,6 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser, onProfileU
             alert("Erro ao atualizar a avaliação do Google.");
         }
     }, []);
-
-    const handleUpdateLocation = useCallback(async (restaurantId: string, locationToUpdate: Location) => {
-        const restaurant = allRestaurants.find(r => r.id === restaurantId);
-        if (!restaurant) return;
-    
-        try {
-            const ai = new GoogleGenAI({apiKey: import.meta.env.VITE_GEMINI_API_KEY});
-            const prompt = `Your task is to find the precise latitude and longitude for a given address using Google Search. The address is: "${locationToUpdate.address}". The context is the city of Curitiba, PR, Brazil. Return ONLY a valid JSON object with "latitude" and "longitude" keys. Example of a perfect response: {"latitude": -25.4284, "longitude": -49.2733}. If you cannot determine the coordinates with high confidence, return {"latitude": null, "longitude": null}. Do not add any other text or markdown.`;
-            
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: prompt,
-                config: {
-                    tools: [{ googleSearch: {} }]
-                }
-            });
-    
-            const responseText = response.text.trim();
-            const jsonMatch = responseText.match(/{[\s\S]*}/);
-            if (!jsonMatch) {
-                 throw new Error("Geocoding failed: No valid JSON object found in the AI response.");
-            }
-            
-            const result = JSON.parse(jsonMatch[0]);
-            const newCoords = { latitude: result.latitude || null, longitude: result.longitude || null };
-    
-            const updatedLocations = restaurant.locations.map(loc => 
-                loc.address === locationToUpdate.address ? { ...loc, ...newCoords } : loc
-            );
-    
-            const { error } = await supabase.from('restaurants').update({ locations: updatedLocations } as any).eq('id', restaurantId);
-            if (error) throw error;
-            
-            // Refetch to ensure all components are updated
-            await fetchData();
-            alert("Coordenadas atualizadas com sucesso!");
-    
-        } catch (error) {
-            console.error("Error re-geocoding location:", error);
-            alert(`Não foi possível atualizar as coordenadas: ${(error as Error).message}`);
-        }
-    }, [allRestaurants, fetchData]);
 
     const handleUpdateMemories = useCallback(async (restaurantId: string, newMemories: Memory[]) => {
         const { error } = await supabase.from('restaurants').update({ memories: newMemories } as any).eq('id', restaurantId);
@@ -997,7 +956,6 @@ const RestaurantsApp: React.FC<RestaurantsAppProps> = ({ currentUser, onProfileU
                         onEdit={handleOpenEditModal}
                         onRemoveFromList={handleRemoveFromList}
                         onToggleFavorite={handleToggleFavorite}
-                        onUpdateLocation={handleUpdateLocation}
                     />
                  )}
                  {modalContent === 'import' && (

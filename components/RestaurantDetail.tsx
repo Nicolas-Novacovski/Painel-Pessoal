@@ -1,101 +1,15 @@
 
+
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Restaurant, Review, User, Location, Memory, DatePlan, UserProfile } from '../types';
 import { averageRating, slugify, compressImage } from '../utils/helpers';
-import { MapPinIcon, StarIcon, TrashIcon, UberIcon, PencilIcon, GoogleIcon, CameraIcon, PlusIcon, XMarkIcon, PlayIcon, HeartIcon, TagIcon, SparklesIcon, ChevronDownIcon, ArrowPathIcon, CheckIcon, HomeIcon, RouteIcon } from './Icons';
+import { MapPinIcon, StarIcon, TrashIcon, UberIcon, PencilIcon, GoogleIcon, CameraIcon, PlusIcon, XMarkIcon, PlayIcon, HeartIcon, TagIcon, SparklesIcon, ChevronDownIcon, CheckIcon } from './Icons';
+// FIX: Added 'PriceRatingInput' to the import from UIComponents to resolve the 'Cannot find name' error.
 import { Button, PriceRatingDisplay, StarRatingDisplay, StarRatingInput, Modal, Input, PriceRatingInput } from './UIComponents';
 import DatePlannerForm from './DatePlannerForm';
 import { supabase } from '../utils/supabase';
 import { USERS } from '../constants';
 import { GoogleGenAI } from "@google/genai";
-import L from 'leaflet';
-
-// --- Interactive Map Component ---
-const InteractiveMap: React.FC<{
-    restaurantLocation: Location | null;
-    userLocation: { lat: number; lng: number } | null;
-    showHome: boolean;
-}> = ({ restaurantLocation, userLocation, showHome }) => {
-    const mapContainerRef = useRef<HTMLDivElement>(null);
-    const mapRef = useRef<L.Map | null>(null);
-    const markersRef = useRef<L.FeatureGroup | null>(null);
-    const routeControlRef = useRef<any | null>(null);
-
-
-    // Initialize map
-    useEffect(() => {
-        if (mapRef.current === null && mapContainerRef.current) {
-            mapRef.current = L.map(mapContainerRef.current, { scrollWheelZoom: false });
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            }).addTo(mapRef.current);
-            markersRef.current = L.featureGroup().addTo(mapRef.current);
-
-            setTimeout(() => mapRef.current?.invalidateSize(), 300);
-        }
-    }, []);
-
-    // Update markers and view
-    useEffect(() => {
-        const map = mapRef.current;
-        const markers = markersRef.current;
-        if (!map || !markers) return;
-
-        // Limpa rota e marcadores antigos
-        if (routeControlRef.current) {
-            map.removeControl(routeControlRef.current);
-            routeControlRef.current = null;
-        }
-        markers.clearLayers();
-
-        const restaurantIconHtml = `<div style="background-color: #0284c7; border-radius: 9999px; padding: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="white" style="width: 20px; height: 20px;"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 21v-7.5c0-.621-.504-1.125-1.125-1.125h-2.25c.621 0 1.125.504 1.125 1.125V21M3 6.375c0-.621.504-1.125 1.125-1.125h15.75c.621 0 1.125.504 1.125 1.125v10.5A2.25 2.25 0 0 1 18.75 21H5.25A2.25 2.25 0 0 1 3 18.75V6.375z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 21a2.25 2.25 0 0 0 2.25-2.25v-1.125c0-.621-.504-1.125-1.125-1.125-2.254 0-4.49-1.21-6.096-3.132-1.606-1.922-3.23-1.922-4.836 0-1.606 1.922-3.842 3.132-6.096 3.132C3.504 16.5 3 17.004 3 17.625v1.125c0 1.242 1.008 2.25 2.25 2.25h14.25zM12 18.75h.008v.008H12v-.008z" /></svg></div>`;
-        const homeIconHtml = `<div style="background-color: #ec4899; border-radius: 9999px; padding: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="white" style="width: 20px; height: 20px;"><path stroke-linecap="round" stroke-linejoin="round" d="m2.25 12 8.955-8.955a1.125 1.125 0 0 1 1.59 0L21.75 12" /><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h7.5" /></svg></div>`;
-        const restaurantIcon = L.divIcon({ html: restaurantIconHtml, className: 'bg-transparent border-none', iconSize: [32, 32], iconAnchor: [16, 32] });
-        const homeIcon = L.divIcon({ html: homeIconHtml, className: 'bg-transparent border-none', iconSize: [32, 32], iconAnchor: [16, 32] });
-        
-        const hasRestaurantCoords = restaurantLocation?.latitude && restaurantLocation?.longitude;
-
-        if (showHome && userLocation && hasRestaurantCoords) {
-            const userLatLng = L.latLng(userLocation.lat, userLocation.lng);
-            const restaurantLatLng = L.latLng(restaurantLocation!.latitude!, restaurantLocation!.longitude!);
-            
-            L.marker(userLatLng, { icon: homeIcon }).addTo(markers);
-            L.marker(restaurantLatLng, { icon: restaurantIcon }).addTo(markers);
-            
-            const control = (L as any).Routing.control({
-                waypoints: [userLatLng, restaurantLatLng],
-                routeWhileDragging: false,
-                show: false,
-                addWaypoints: false,
-                draggableWaypoints: false,
-                lineOptions: {
-                    styles: [{ color: '#0284c7', opacity: 0.8, weight: 6 }]
-                },
-                createMarker: () => null
-            }).addTo(map);
-
-            routeControlRef.current = control;
-            
-            // FIX: Fit bounds to show both markers and the route
-            const bounds = markers.getBounds();
-            if (bounds.isValid()) {
-                map.fitBounds(bounds, { padding: [50, 50] });
-            }
-
-        } else if (hasRestaurantCoords) {
-            const restaurantLatLng = L.latLng(restaurantLocation!.latitude!, restaurantLocation!.longitude!);
-            L.marker(restaurantLatLng, { icon: restaurantIcon }).addTo(markers);
-            map.setView(restaurantLatLng, 15);
-        } else {
-             map.setView([-25.4284, -49.2733], 13);
-        }
-        
-    }, [restaurantLocation, userLocation, showHome]);
-
-
-    return <div ref={mapContainerRef} className="h-60 w-full bg-slate-200 rounded-lg overflow-hidden border border-slate-300 z-0" />;
-};
-
 
 interface RestaurantDetailProps {
     restaurant: Restaurant & { is_favorited: boolean };
@@ -109,19 +23,15 @@ interface RestaurantDetailProps {
     onEdit: (restaurant: Restaurant) => void;
     onRemoveFromList: (id: string) => Promise<void>;
     onToggleFavorite: (id: string, currentState: boolean) => Promise<void>;
-    onUpdateLocation: (restaurantId: string, location: Location) => Promise<void>;
 }
 
-export const RestaurantDetail: React.FC<RestaurantDetailProps> = ({ restaurant, currentUser, onUpdateReview, onUpdatePriceRange, onUpdateGoogleRating, onUpdateMemories, onUpdatePromotions, onSaveDatePlan, onEdit, onRemoveFromList, onToggleFavorite, onUpdateLocation }) => {
+export const RestaurantDetail: React.FC<RestaurantDetailProps> = ({ restaurant, currentUser, onUpdateReview, onUpdatePriceRange, onUpdateGoogleRating, onUpdateMemories, onUpdatePromotions, onSaveDatePlan, onEdit, onRemoveFromList, onToggleFavorite }) => {
     // Review State
     const [rating, setRating] = useState(0);
     const [comment, setComment] = useState('');
     const [isSavingReview, setIsSavingReview] = useState(false);
-    const [selectedLocation, setSelectedLocation] = useState<Location | null>(restaurant.locations?.[0] || null);
     const [copyStatus, setCopyStatus] = useState<'idle' | 'copying' | 'copied'>('idle');
-    const [isGeocoding, setIsGeocoding] = useState<string | null>(null);
-    const [showHome, setShowHome] = useState(false);
-
+    
     // Google Rating State
     const [isEditingGoogleRating, setIsEditingGoogleRating] = useState(false);
     const [tempGoogleRating, setTempGoogleRating] = useState(restaurant.google_rating?.toString() || '');
@@ -147,9 +57,6 @@ export const RestaurantDetail: React.FC<RestaurantDetailProps> = ({ restaurant, 
     const [isEditingDate, setIsEditingDate] = useState(false);
     const [editingMonth, setEditingMonth] = useState(1);
     const [editingYear, setEditingYear] = useState(new Date().getFullYear());
-
-    const userHasLocation = !!currentUser.latitude && !!currentUser.longitude;
-    const userLocation = userHasLocation ? { lat: currentUser.latitude!, lng: currentUser.longitude! } : null;
 
     const partner = useMemo(() => USERS.find(u => u !== currentUser.name && u !== 'Visitante'), [currentUser.name]);
 
@@ -201,10 +108,7 @@ export const RestaurantDetail: React.FC<RestaurantDetailProps> = ({ restaurant, 
         const existingReview = restaurant.reviews.find(r => r.user === currentUser.name);
         setRating(existingReview?.rating || 0);
         setComment(existingReview?.comment || '');
-        if (!selectedLocation && restaurant.locations?.length > 0) {
-            setSelectedLocation(restaurant.locations[0]);
-        }
-    }, [restaurant, currentUser.name, selectedLocation]);
+    }, [restaurant, currentUser.name]);
 
     const handleReviewSubmit = async () => {
         if(rating > 0) {
@@ -411,14 +315,16 @@ export const RestaurantDetail: React.FC<RestaurantDetailProps> = ({ restaurant, 
         }
     };
 
+    const primaryLocationAddress = restaurant.locations?.[0]?.address;
+
     const handleNavigate = async () => {
-        if (!selectedLocation?.address) {
-            alert('Selecione um endereço para navegar.');
+        if (!primaryLocationAddress) {
+            alert('Endereço não disponível para navegação.');
             return;
         }
 
         setCopyStatus('copying');
-        const textToCopy = `${restaurant.name}, ${selectedLocation.address}`;
+        const textToCopy = `${restaurant.name}, ${primaryLocationAddress}`;
 
         try {
             await navigator.clipboard.writeText(textToCopy);
@@ -470,17 +376,6 @@ Se nenhuma promoção ativa for encontrada, retorne APENAS a frase: "Nenhuma pro
         }
     }, [restaurant.id, restaurant.name, onUpdatePromotions]);
 
-    const handleRefreshLocation = async (location: Location) => {
-        if (!location.address) {
-            alert("O endereço está vazio e não pode ser geocodificado.");
-            return;
-        }
-        setIsGeocoding(location.address);
-        await onUpdateLocation(restaurant.id, location);
-        setIsGeocoding(null);
-    };
-
-
     const calculatedAverageRating = averageRating(restaurant.reviews);
 
     const getMemoryButtonText = () => {
@@ -489,7 +384,11 @@ Se nenhuma promoção ativa for encontrada, retorne APENAS a frase: "Nenhuma pro
         return `Salvar ${newMemoryFiles.length > 1 ? `${newMemoryFiles.length} Memórias` : 'Memória'}`;
     }
     
-    const isNavDisabled = !selectedLocation || !selectedLocation.address;
+    const mapSrc = primaryLocationAddress
+        ? `https://maps.google.com/maps?q=${encodeURIComponent(primaryLocationAddress)}&t=&z=15&ie=UTF8&iwloc=&output=embed`
+        : '';
+    
+    const isNavDisabled = !primaryLocationAddress;
 
     const getUberButtonText = () => {
         if (copyStatus === 'copying') return 'Copiando...';
@@ -504,59 +403,20 @@ Se nenhuma promoção ativa for encontrada, retorne APENAS a frase: "Nenhuma pro
     return (
         <>
             <div className="space-y-6">
-                <div className="relative">
-                    <InteractiveMap 
-                        restaurantLocation={selectedLocation}
-                        userLocation={userLocation}
-                        showHome={showHome}
-                    />
-                    <div className="absolute top-3 right-3 z-[500] flex flex-col gap-2">
-                        {userHasLocation && selectedLocation?.latitude && (
-                            <Button 
-                                variant={showHome ? 'primary' : 'secondary'}
-                                size="sm"
-                                onClick={() => setShowHome(!showHome)}
-                                className="!p-2 shadow-lg !bg-white/80 hover:!bg-white"
-                                title={showHome ? "Ocultar rota" : "Mostrar rota de casa"}
-                            >
-                                <HomeIcon className={`w-5 h-5 ${showHome ? 'text-primary' : 'text-slate-600'}`}/>
-                            </Button>
-                        )}
+                 {primaryLocationAddress && (
+                    <div className="h-60 w-full bg-slate-200 rounded-lg overflow-hidden border border-slate-300">
+                        <iframe
+                            width="100%"
+                            height="100%"
+                            style={{ border: 0 }}
+                            loading="lazy"
+                            allowFullScreen
+                            src={mapSrc}
+                            aria-label={`Mapa mostrando ${restaurant.name}`}
+                        ></iframe>
                     </div>
-                </div>
+                )}
                 
-                <div className="space-y-2">
-                    <h4 className="font-bold text-lg text-slate-800">Endereços</h4>
-                    <div className="flex flex-wrap gap-2">
-                        {restaurant.locations?.map((loc, index) => {
-                             const hasCoords = loc.latitude && loc.longitude;
-                             return (
-                                <div key={index} className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg group">
-                                    <button 
-                                        onClick={() => setSelectedLocation(loc)}
-                                        className={`flex items-center gap-2 text-left px-2 py-1 rounded-md transition-colors w-full ${selectedLocation?.address === loc.address ? 'bg-primary/20' : 'hover:bg-slate-200'}`}
-                                    >
-                                         <MapPinIcon className={`w-5 h-5 flex-shrink-0 ${selectedLocation?.address === loc.address ? 'text-primary' : (hasCoords ? 'text-slate-500' : 'text-red-400')}`} title={!hasCoords ? "Coordenadas ausentes" : ""} />
-                                        <span className="text-sm font-medium text-slate-700">{loc.address}</span>
-                                    </button>
-                                    {!hasCoords && (
-                                        <Button
-                                            variant="ghost" 
-                                            size="sm"
-                                            className="!p-1.5"
-                                            onClick={() => handleRefreshLocation(loc)}
-                                            disabled={isGeocoding === loc.address}
-                                            title="Buscar coordenadas com IA"
-                                        >
-                                            <ArrowPathIcon className={`w-4 h-4 ${isGeocoding === loc.address ? 'animate-spin' : 'text-red-500 group-hover:text-primary'}`} />
-                                        </Button>
-                                    )}
-                                </div>
-                             )
-                        })}
-                    </div>
-                </div>
-
                 <div className="flex flex-col sm:flex-row gap-3">
                     <Button onClick={handleNavigate} disabled={isNavDisabled} className="flex-1">
                          <UberIcon className="w-5 h-5"/>

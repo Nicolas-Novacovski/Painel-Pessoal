@@ -16,7 +16,7 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "types": ["leaflet"]
+    "types": []
   },
   "include": ["."],
   "references": [{ "path": "./tsconfig.node.json" }]
