@@ -6,6 +6,7 @@ import L from 'leaflet';
 interface AchievementsMapProps {
     restaurants: (Restaurant & { is_favorited: boolean })[];
     onSelectRestaurant: (restaurant: Restaurant & { is_favorited: boolean }) => void;
+    homeLocation: { lat: number; lng: number } | null;
 }
 
 // Corrige o problema do ícone padrão do Leaflet no React
@@ -45,7 +46,7 @@ const getPinColorByRating = (rating: number | null | undefined): string => {
 };
 
 
-const AchievementsMap: React.FC<AchievementsMapProps> = ({ restaurants, onSelectRestaurant }) => {
+const AchievementsMap: React.FC<AchievementsMapProps> = ({ restaurants, onSelectRestaurant, homeLocation }) => {
     const mapContainerRef = useRef<HTMLDivElement>(null);
     const mapRef = useRef<L.Map | null>(null);
     const markersRef = useRef<L.FeatureGroup | null>(null);
@@ -88,12 +89,38 @@ const AchievementsMap: React.FC<AchievementsMapProps> = ({ restaurants, onSelect
 
         markers.clearLayers();
         
-        if (restaurantsWithCoords.length === 0) {
+        if (restaurantsWithCoords.length === 0 && !homeLocation) {
             map.setView([-25.4284, -49.2733], 13);
             return;
         }
 
         const bounds = L.latLngBounds([]);
+        
+        // Adiciona pino de casa
+        if (homeLocation) {
+            const homeIconHtml = `
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512" style="width: 32px; height: 42px; filter: drop-shadow(0 2px 3px rgba(0,0,0,0.5));">
+                    <path d="M172.268 501.67C26.97 291.031 0 269.413 0 192 0 85.961 85.961 0 192 0s192 85.961 192 192c0 77.413-26.97 99.031-172.268 309.67-9.535 13.774-29.93 13.773-39.464 0z" fill="#22c55e"/>
+                    <circle cx="192" cy="192" r="80" fill="white"/>
+                    <g transform="translate(192, 192) scale(4.5) translate(-12, -12)">
+                       <path stroke-linecap="round" stroke-linejoin="round" fill="#22c55e" d="M2.25 12l8.955-8.955a1.125 1.125 0 011.59 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h7.5" />
+                    </g>
+                </svg>
+            `;
+            const homeIcon = L.divIcon({
+                html: homeIconHtml,
+                className: 'custom-leaflet-icon--home',
+                iconSize: [32, 42],
+                iconAnchor: [16, 42],
+                popupAnchor: [0, -45],
+            });
+
+            const homeMarker = L.marker([homeLocation.lat, homeLocation.lng], { icon: homeIcon, zIndexOffset: 1000 });
+            homeMarker.bindPopup("<b>Sua Casa</b>");
+            markers.addLayer(homeMarker);
+            bounds.extend([homeLocation.lat, homeLocation.lng]);
+        }
+
 
         restaurantsWithCoords.forEach(restaurant => {
             const { latitude, longitude } = restaurant.locations[0];
@@ -131,9 +158,9 @@ const AchievementsMap: React.FC<AchievementsMapProps> = ({ restaurants, onSelect
         });
 
         if (bounds.isValid()) {
-            map.fitBounds(bounds, { padding: [50, 50] });
+            map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
         }
-    }, [restaurantsWithCoords, onSelectRestaurant]);
+    }, [restaurantsWithCoords, onSelectRestaurant, homeLocation]);
 
 
     return <div ref={mapContainerRef} className="w-full h-[calc(100vh-220px)] rounded-xl" />;
