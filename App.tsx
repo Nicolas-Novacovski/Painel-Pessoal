@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { View, UserProfile, User, Role } from './types';
@@ -16,6 +17,7 @@ import ApplicationsApp from './components/ApplicationsApp';
 import AdminApp from './components/AdminApp';
 import AIRecommenderApp from './components/AIRecommenderApp';
 import TravelApp from './components/TravelApp';
+import { GoogleGenAI, Type } from '@google/genai';
 
 const GOOGLE_CLIENT_ID = '541449375636-vth3bki95hgg0n3mnt950loi6tu17gh2.apps.googleusercontent.com';
 

@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Restaurant, Review, User, Location, Memory, DatePlan, UserProfile } from '../types';
 import { averageRating, slugify, compressImage } from '../utils/helpers';
@@ -18,6 +19,8 @@ const InteractiveMap: React.FC<{
     const mapContainerRef = useRef<HTMLDivElement>(null);
     const mapRef = useRef<L.Map | null>(null);
     const markersRef = useRef<L.FeatureGroup | null>(null);
+    const routeControlRef = useRef<any | null>(null);
+
 
     // Initialize map
     useEffect(() => {
@@ -38,35 +41,51 @@ const InteractiveMap: React.FC<{
         const markers = markersRef.current;
         if (!map || !markers) return;
 
+        // Limpa rota e marcadores antigos
+        if (routeControlRef.current) {
+            map.removeControl(routeControlRef.current);
+            routeControlRef.current = null;
+        }
         markers.clearLayers();
-        const bounds = L.latLngBounds([]);
-        
+
         const restaurantIconHtml = `<div style="background-color: #0284c7; border-radius: 9999px; padding: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="white" style="width: 20px; height: 20px;"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 21v-7.5c0-.621-.504-1.125-1.125-1.125h-2.25c.621 0 1.125.504 1.125 1.125V21M3 6.375c0-.621.504-1.125 1.125-1.125h15.75c.621 0 1.125.504 1.125 1.125v10.5A2.25 2.25 0 0 1 18.75 21H5.25A2.25 2.25 0 0 1 3 18.75V6.375z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 21a2.25 2.25 0 0 0 2.25-2.25v-1.125c0-.621-.504-1.125-1.125-1.125-2.254 0-4.49-1.21-6.096-3.132-1.606-1.922-3.23-1.922-4.836 0-1.606 1.922-3.842 3.132-6.096 3.132C3.504 16.5 3 17.004 3 17.625v1.125c0 1.242 1.008 2.25 2.25 2.25h14.25zM12 18.75h.008v.008H12v-.008z" /></svg></div>`;
         const homeIconHtml = `<div style="background-color: #ec4899; border-radius: 9999px; padding: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="white" style="width: 20px; height: 20px;"><path stroke-linecap="round" stroke-linejoin="round" d="m2.25 12 8.955-8.955a1.125 1.125 0 0 1 1.59 0L21.75 12" /><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h7.5" /></svg></div>`;
+        const restaurantIcon = L.divIcon({ html: restaurantIconHtml, className: 'bg-transparent border-none', iconSize: [32, 32], iconAnchor: [16, 32] });
+        const homeIcon = L.divIcon({ html: homeIconHtml, className: 'bg-transparent border-none', iconSize: [32, 32], iconAnchor: [16, 32] });
+        
+        const hasRestaurantCoords = restaurantLocation?.latitude && restaurantLocation?.longitude;
 
-        const restaurantIcon = L.divIcon({ html: restaurantIconHtml, className: 'bg-transparent border-none', iconSize: [32, 32], iconAnchor: [16, 32], popupAnchor: [0, -32] });
-        const homeIcon = L.divIcon({ html: homeIconHtml, className: 'bg-transparent border-none', iconSize: [32, 32], iconAnchor: [16, 32], popupAnchor: [0, -32] });
-
-        if (restaurantLocation?.latitude && restaurantLocation?.longitude) {
-            const restaurantLatLng = L.latLng(restaurantLocation.latitude, restaurantLocation.longitude);
-            L.marker(restaurantLatLng, { icon: restaurantIcon }).bindTooltip("Restaurante").addTo(markers);
-            bounds.extend(restaurantLatLng);
-        }
-
-        if (showHome && userLocation) {
+        if (showHome && userLocation && hasRestaurantCoords) {
             const userLatLng = L.latLng(userLocation.lat, userLocation.lng);
-            L.marker(userLatLng, { icon: homeIcon }).bindTooltip("Sua Casa").addTo(markers);
-            bounds.extend(userLatLng);
-        }
+            const restaurantLatLng = L.latLng(restaurantLocation!.latitude!, restaurantLocation!.longitude!);
+            
+            L.marker(userLatLng, { icon: homeIcon }).addTo(markers);
+            L.marker(restaurantLatLng, { icon: restaurantIcon }).addTo(markers);
+            
+            const control = (L as any).Routing.control({
+                waypoints: [userLatLng, restaurantLatLng],
+                routeWhileDragging: false,
+                show: false, // Oculta o painel de instruções
+                addWaypoints: false, // Previne que o usuário adicione pontos
+                draggableWaypoints: false, // Previne que o usuário arraste os pontos
+                lineOptions: {
+                    styles: [{ color: '#0284c7', opacity: 0.8, weight: 6 }]
+                },
+                createMarker: () => null // Previne a criação dos marcadores padrão feios
+            }).addTo(map);
 
-        if (bounds.isValid()) {
-            map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
-        } else if (restaurantLocation?.latitude && restaurantLocation?.longitude) {
-            map.setView([restaurantLocation.latitude, restaurantLocation.longitude], 15);
+            routeControlRef.current = control;
+
+        } else if (hasRestaurantCoords) {
+            const restaurantLatLng = L.latLng(restaurantLocation!.latitude!, restaurantLocation!.longitude!);
+            L.marker(restaurantLatLng, { icon: restaurantIcon }).addTo(markers);
+            map.setView(restaurantLatLng, 15);
         } else {
-            map.setView([-25.4284, -49.2733], 13);
+             map.setView([-25.4284, -49.2733], 13); // Posição padrão para Curitiba
         }
+        
     }, [restaurantLocation, userLocation, showHome]);
+
 
     return <div ref={mapContainerRef} className="h-60 w-full bg-slate-200 rounded-lg overflow-hidden border border-slate-300 z-0" />;
 };
@@ -410,12 +429,6 @@ export const RestaurantDetail: React.FC<RestaurantDetailProps> = ({ restaurant, 
             setCopyStatus('idle');
         }
     };
-
-    const handleDirections = () => {
-        if (!userLocation || !selectedLocation?.latitude || !selectedLocation?.longitude) return;
-        const url = `https://www.google.com/maps/dir/?api=1&origin=${userLocation.lat},${userLocation.lng}&destination=${selectedLocation.latitude},${selectedLocation.longitude}&travelmode=driving`;
-        window.open(url, '_blank');
-    };
     
     const handleFetchPromotions = useCallback(async () => {
         setIsFetchingPromotions(true);
@@ -492,13 +505,13 @@ Se nenhuma promoção ativa for encontrada, retorne APENAS a frase: "Nenhuma pro
                         showHome={showHome}
                     />
                     <div className="absolute top-3 right-3 z-[500] flex flex-col gap-2">
-                        {userHasLocation && (
+                        {userHasLocation && selectedLocation?.latitude && (
                             <Button 
                                 variant={showHome ? 'primary' : 'secondary'}
                                 size="sm"
                                 onClick={() => setShowHome(!showHome)}
                                 className="!p-2 shadow-lg !bg-white/80 hover:!bg-white"
-                                title={showHome ? "Ocultar minha casa" : "Mostrar minha casa no mapa"}
+                                title={showHome ? "Ocultar rota" : "Mostrar rota de casa"}
                             >
                                 <HomeIcon className={`w-5 h-5 ${showHome ? 'text-primary' : 'text-slate-600'}`}/>
                             </Button>
@@ -538,12 +551,6 @@ Se nenhuma promoção ativa for encontrada, retorne APENAS a frase: "Nenhuma pro
                          <UberIcon className="w-5 h-5"/>
                          {getUberButtonText()}
                     </Button>
-                    {userHasLocation && (
-                        <Button onClick={handleDirections} disabled={!selectedLocation?.latitude} variant="secondary" className="flex-1">
-                            <RouteIcon className="w-5 h-5"/>
-                            Ver Rota (Google)
-                        </Button>
-                    )}
                     <Button onClick={() => setIsDatePlannerOpen(true)} variant="accent" className="flex-1">
                         <HeartIcon className="w-5 h-5"/>
                         Propor um Date
