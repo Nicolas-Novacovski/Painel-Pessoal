@@ -2,6 +2,11 @@ import React, { useMemo, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Restaurant } from '../types';
 import L from 'leaflet';
+import 'leaflet.markercluster';
+
+import { StarRatingDisplay } from './UIComponents';
+import { averageRating } from '../utils/helpers';
+import { GoogleIcon, StarIcon } from './Icons';
 
 interface AchievementsMapProps {
     restaurants: (Restaurant & { is_favorited: boolean })[];
@@ -18,19 +23,38 @@ L.Icon.Default.mergeOptions({
 
 // Um componente React para o conteúdo do popup, para que possamos lidar com os cliques facilmente
 const PopupContent: React.FC<{ restaurant: Restaurant & { is_favorited: boolean }, onSelectRestaurant: (r: Restaurant & { is_favorited: boolean }) => void }> = ({ restaurant, onSelectRestaurant }) => {
+    const ourRating = useMemo(() => averageRating(restaurant.reviews), [restaurant.reviews]);
+
     return (
-        <div className="w-48 text-center">
-            <img src={restaurant.image || `https://picsum.photos/seed/${restaurant.id}/200/100`} alt={restaurant.name} className="w-full h-24 object-cover rounded-md mb-2" />
-            <p className="font-bold text-base text-dark">{restaurant.name}</p>
-            <button
-                onClick={(e) => {
-                    e.stopPropagation(); // Previne eventos de clique do mapa
-                    onSelectRestaurant(restaurant);
-                }}
-                className="mt-2 w-full text-sm font-semibold text-white bg-primary hover:bg-primary-focus px-3 py-1 rounded-md transition-colors active:scale-95"
-            >
-                Ver Detalhes
-            </button>
+        <div className="w-48 text-center font-sans">
+            <img src={restaurant.image || `https://picsum.photos/seed/${restaurant.id}/200/100`} alt={restaurant.name} className="w-full h-24 object-cover rounded-t-md bg-slate-200" />
+            <div className="p-2">
+                <p className="font-bold text-base text-dark truncate mb-2">{restaurant.name}</p>
+                <div className="flex flex-col items-center gap-1 text-xs">
+                    {ourRating > 0 && (
+                        <div className="flex items-center gap-1">
+                            <StarRatingDisplay rating={ourRating} />
+                            <span className="font-semibold text-slate-600">({ourRating.toFixed(1)})</span>
+                        </div>
+                    )}
+                    {restaurant.google_rating && (
+                         <div className="flex items-center gap-1">
+                            <GoogleIcon className="w-3 h-3"/>
+                            <StarIcon className="w-3 h-3 text-yellow-400" />
+                            <span className="font-semibold text-slate-600">{restaurant.google_rating.toFixed(1)}</span>
+                        </div>
+                    )}
+                </div>
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation(); // Previne eventos de clique do mapa
+                        onSelectRestaurant(restaurant);
+                    }}
+                    className="mt-3 w-full text-sm font-semibold text-white bg-primary hover:bg-primary-focus px-3 py-1 rounded-md transition-colors active:scale-95"
+                >
+                    Ver Detalhes
+                </button>
+            </div>
         </div>
     );
 };
@@ -48,6 +72,9 @@ const getPinColorByRating = (rating: number | null | undefined): string => {
 const AchievementsMap: React.FC<AchievementsMapProps> = ({ restaurants, onSelectRestaurant }) => {
     const mapContainerRef = useRef<HTMLDivElement>(null);
     const mapRef = useRef<L.Map | null>(null);
+    // Fix: Changed type from L.MarkerClusterGroup to L.FeatureGroup to resolve TypeScript error.
+    // L.MarkerClusterGroup is not defined without @types/leaflet.markercluster,
+    // but it extends L.FeatureGroup, which provides all the necessary methods.
     const markersRef = useRef<L.FeatureGroup | null>(null);
 
     const restaurantsWithCoords = useMemo(() => {
@@ -68,7 +95,9 @@ const AchievementsMap: React.FC<AchievementsMapProps> = ({ restaurants, onSelect
                 { attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }
             ).addTo(mapRef.current);
             
-            markersRef.current = L.featureGroup().addTo(mapRef.current);
+            // Use markerClusterGroup instead of featureGroup
+            // Cast to 'any' to avoid potential TypeScript issues if types aren't merged
+            markersRef.current = (L as any).markerClusterGroup().addTo(mapRef.current);
         }
         
         const map = mapRef.current;
@@ -92,8 +121,6 @@ const AchievementsMap: React.FC<AchievementsMapProps> = ({ restaurants, onSelect
             map.setView([-25.4284, -49.2733], 13);
             return;
         }
-
-        const bounds = L.latLngBounds([]);
         
         restaurantsWithCoords.forEach(restaurant => {
             const { latitude, longitude } = restaurant.locations[0];
@@ -126,10 +153,10 @@ const AchievementsMap: React.FC<AchievementsMapProps> = ({ restaurants, onSelect
                 });
                 
                 markers.addLayer(marker);
-                bounds.extend([latitude, longitude]);
             }
         });
 
+        const bounds = markers.getBounds();
         if (bounds.isValid()) {
             map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
         }
