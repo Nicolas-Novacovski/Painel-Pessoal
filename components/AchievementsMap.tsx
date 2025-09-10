@@ -8,6 +8,51 @@ import { StarRatingDisplay } from './UIComponents';
 import { averageRating } from '../utils/helpers';
 import { GoogleIcon, StarIcon } from './Icons';
 
+// FIX: Add module augmentation for leaflet.markercluster to provide missing types.
+// This resolves errors related to MarkerClusterGroup and markerClusterGroup not being found on the Leaflet namespace.
+declare module 'leaflet' {
+    interface MarkerClusterGroupOptions extends L.LayerOptions {
+        showCoverageOnHover?: boolean;
+        zoomToBoundsOnClick?: boolean;
+        spiderfyOnMaxZoom?: boolean;
+        removeOutsideVisibleBounds?: boolean;
+        animate?: boolean;
+        animateAddingMarkers?: boolean;
+        disableClusteringAtZoom?: number;
+        maxClusterRadius?: number | ((zoom: number) => number);
+        polygonOptions?: L.PolylineOptions;
+        singleMarkerMode?: boolean;
+        spiderfyDistanceMultiplier?: number;
+        spiderLegPolylineOptions?: L.PolylineOptions;
+        iconCreateFunction?: (cluster: MarkerCluster) => L.DivIcon;
+        chunkedLoading?: boolean;
+        chunkInterval?: number;
+        chunkDelay?: number;
+        chunkProgress?: (processed: number, total: number, time: number) => void;
+    }
+
+    interface MarkerCluster extends L.Marker {
+        getChildCount(): number;
+        getAllChildMarkers(): L.Marker[];
+        getBounds(): L.LatLngBounds;
+        getLatLng(): L.LatLng;
+    }
+
+    class MarkerClusterGroup extends L.FeatureGroup {
+        constructor(options?: MarkerClusterGroupOptions);
+        addLayer(layer: L.Layer): this;
+        removeLayer(layer: L.Layer): this;
+        clearLayers(): this;
+        getAllChildMarkers(): L.Marker[];
+        getChildCount(): number;
+        zoomToShowLayer(layer: L.Layer, callback?: () => void): void;
+        hasLayer(layer: L.Layer): boolean;
+        getVisibleParent(marker: L.Marker): L.Marker | null;
+    }
+
+    function markerClusterGroup(options?: MarkerClusterGroupOptions): MarkerClusterGroup;
+}
+
 interface AchievementsMapProps {
     restaurants: (Restaurant & { is_favorited: boolean })[];
     onSelectRestaurant: (restaurant: Restaurant & { is_favorited: boolean }) => void;
@@ -72,10 +117,7 @@ const getPinColorByRating = (rating: number | null | undefined): string => {
 const AchievementsMap: React.FC<AchievementsMapProps> = ({ restaurants, onSelectRestaurant }) => {
     const mapContainerRef = useRef<HTMLDivElement>(null);
     const mapRef = useRef<L.Map | null>(null);
-    // Fix: Changed type from L.MarkerClusterGroup to L.FeatureGroup to resolve TypeScript error.
-    // L.MarkerClusterGroup is not defined without @types/leaflet.markercluster,
-    // but it extends L.FeatureGroup, which provides all the necessary methods.
-    const markersRef = useRef<L.FeatureGroup | null>(null);
+    const markersRef = useRef<L.MarkerClusterGroup | null>(null);
 
     const restaurantsWithCoords = useMemo(() => {
         return restaurants.filter(r => 
@@ -95,9 +137,7 @@ const AchievementsMap: React.FC<AchievementsMapProps> = ({ restaurants, onSelect
                 { attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }
             ).addTo(mapRef.current);
             
-            // Use markerClusterGroup instead of featureGroup
-            // Cast to 'any' to avoid potential TypeScript issues if types aren't merged
-            markersRef.current = (L as any).markerClusterGroup().addTo(mapRef.current);
+            markersRef.current = L.markerClusterGroup().addTo(mapRef.current);
         }
         
         const map = mapRef.current;
