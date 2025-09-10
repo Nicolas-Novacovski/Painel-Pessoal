@@ -2,14 +2,20 @@ import React, { useMemo, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Restaurant } from '../types';
 import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import 'leaflet.markercluster';
+import 'leaflet.markercluster/dist/MarkerCluster.css';
+import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 
 import { StarRatingDisplay } from './UIComponents';
 import { averageRating } from '../utils/helpers';
 import { GoogleIcon, StarIcon } from './Icons';
 
-// FIX: Add module augmentation for leaflet.markercluster to provide missing types.
-// This resolves errors related to MarkerClusterGroup and markerClusterGroup not being found on the Leaflet namespace.
+// FIX: Corrected module augmentation for leaflet.markercluster.
+// The original definitions were conflicting with existing types (likely from @types/leaflet.markercluster),
+// causing "Duplicate identifier" errors. The declarations for MarkerCluster and MarkerClusterGroup have been
+// removed, and the remaining augmentation now correctly references types from the `L` namespace and fixes
+// the signature for `iconCreateFunction`.
 declare module 'leaflet' {
     interface MarkerClusterGroupOptions extends L.LayerOptions {
         showCoverageOnHover?: boolean;
@@ -24,34 +30,18 @@ declare module 'leaflet' {
         singleMarkerMode?: boolean;
         spiderfyDistanceMultiplier?: number;
         spiderLegPolylineOptions?: L.PolylineOptions;
-        iconCreateFunction?: (cluster: MarkerCluster) => L.DivIcon;
+        iconCreateFunction?: (cluster: L.MarkerCluster) => L.DivIcon | L.Icon;
         chunkedLoading?: boolean;
         chunkInterval?: number;
         chunkDelay?: number;
         chunkProgress?: (processed: number, total: number, time: number) => void;
     }
-
-    interface MarkerCluster extends L.Marker {
-        getChildCount(): number;
-        getAllChildMarkers(): L.Marker[];
-        getBounds(): L.LatLngBounds;
-        getLatLng(): L.LatLng;
-    }
-
-    class MarkerClusterGroup extends L.FeatureGroup {
-        constructor(options?: MarkerClusterGroupOptions);
-        addLayer(layer: L.Layer): this;
-        removeLayer(layer: L.Layer): this;
-        clearLayers(): this;
-        getAllChildMarkers(): L.Marker[];
-        getChildCount(): number;
-        zoomToShowLayer(layer: L.Layer, callback?: () => void): void;
-        hasLayer(layer: L.Layer): boolean;
-        getVisibleParent(marker: L.Marker): L.Marker | null;
-    }
-
-    function markerClusterGroup(options?: MarkerClusterGroupOptions): MarkerClusterGroup;
+    
+    // The types L.MarkerCluster and L.MarkerClusterGroup are expected to be available from an installed types package.
+    // This function declaration makes L.markerClusterGroup available to TypeScript.
+    function markerClusterGroup(options?: MarkerClusterGroupOptions): L.MarkerClusterGroup;
 }
+
 
 interface AchievementsMapProps {
     restaurants: (Restaurant & { is_favorited: boolean })[];
