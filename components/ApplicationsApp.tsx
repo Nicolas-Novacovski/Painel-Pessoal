@@ -54,38 +54,27 @@ const NoteForm: React.FC<{
     onClose: () => void;
     initialData?: StudyNote | null;
 }> = ({ onSave, onClose, initialData }) => {
-    const [title, setTitle] = useState('');
-    const [language, setLanguage] = useState('');
-    const [tags, setTags] = useState('');
-    const [content, setContent] = useState('');
-    const [codeSnippet, setCodeSnippet] = useState('');
-    const [confidenceLevel, setConfidenceLevel] = useState<ConfidenceLevel | null>(null);
+    const [title, setTitle] = useState(initialData?.title || '');
+    const [language, setLanguage] = useState(initialData?.language || '');
+    const [tags, setTags] = useState((initialData?.tags || []).join(', '));
+    const [content, setContent] = useState(initialData?.content || '');
+    const [codeSnippet, setCodeSnippet] = useState(initialData?.code_snippet || '');
+    const [confidenceLevel, setConfidenceLevel] = useState<ConfidenceLevel | null>(initialData?.confidence_level || null);
     const [isSaving, setIsSaving] = useState(false);
-
-    useEffect(() => {
-        if (initialData) {
-            setTitle(initialData.title);
-            setLanguage(initialData.language || '');
-            setTags((initialData.tags || []).join(', '));
-            setContent(initialData.content);
-            setCodeSnippet(initialData.code_snippet || '');
-            setConfidenceLevel(initialData.confidence_level || null);
-        }
-    }, [initialData]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!title || !content) {
+        if (!title.trim() || !content.trim()) {
             alert('Título e Conteúdo são obrigatórios.');
             return;
         }
         setIsSaving(true);
         await onSave({
-            title,
-            language: language || null,
+            title: title.trim(),
+            language: language.trim() || null,
             tags: tags.split(',').map(t => t.trim()).filter(Boolean),
-            content,
-            code_snippet: codeSnippet || null,
+            content: content.trim(),
+            code_snippet: codeSnippet.trim() || null,
             confidence_level: confidenceLevel,
         });
         setIsSaving(false);
