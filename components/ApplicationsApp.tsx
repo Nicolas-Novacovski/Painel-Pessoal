@@ -5,38 +5,22 @@ import { Button, Input, Modal } from './UIComponents';
 import { PlusIcon, TrashIcon, PencilIcon, CodeBracketIcon } from './Icons';
 
 const STUDY_NOTES_SETUP_SQL = `
--- SCRIPT DE CONFIGURAÇÃO PARA A TABELA 'study_notes'
--- Este script apaga a antiga tabela 'job_applications' e cria a nova com suporte a múltiplos snippets.
-BEGIN;
+-- SCRIPT DE ATUALIZAÇÃO PARA A TABELA 'study_notes'
+-- Este script garante que sua tabela está atualizada para suportar múltiplos snippets de código, sem apagar seus dados.
+-- É seguro executá-lo múltiplas vezes.
 
--- 1. Apaga a tabela antiga, se existir.
-DROP TABLE IF EXISTS public.job_applications CASCADE;
+-- 1. Apaga a coluna antiga 'code_snippet' (singular, tipo TEXT) se ela existir.
+ALTER TABLE public.study_notes DROP COLUMN IF EXISTS code_snippet;
 
--- 2. Cria a nova tabela 'study_notes' com todas as colunas necessárias.
-CREATE TABLE IF NOT EXISTS public.study_notes (
-    id uuid NOT NULL DEFAULT gen_random_uuid(),
-    created_at timestamptz NOT NULL DEFAULT now(),
-    title text NOT NULL,
-    content text NOT NULL,
-    language text NULL,
-    tags jsonb NULL,
-    user_email text NOT NULL,
-    confidence_level smallint NULL,
-    code_snippets jsonb NULL, -- Alterado de 'code_snippet text' para 'code_snippets jsonb'
-    CONSTRAINT study_notes_pkey PRIMARY KEY (id)
-);
-
--- 3. Desabilita RLS para a tabela. A segurança é garantida pela interface do app.
-ALTER TABLE public.study_notes DISABLE ROW LEVEL SECURITY;
-
-COMMIT;
+-- 2. Adiciona a nova coluna 'code_snippets' (plural, tipo JSONB) se ela não existir.
+ALTER TABLE public.study_notes ADD COLUMN IF NOT EXISTS code_snippets jsonb NULL;
 `;
 
 const DatabaseErrorResolver: React.FC = () => (
     <div className="p-4 m-6 bg-red-50 border-2 border-dashed border-red-200 rounded-lg text-slate-800">
         <h4 className="font-semibold text-red-900">Configuração Necessária</h4>
         <p className="text-sm text-red-800 mt-1">
-            A funcionalidade de 'Anotações' precisa de uma nova tabela no banco de dados. O script abaixo irá remover a antiga tabela de aplicações e criar a nova estrutura.
+            Sua tabela 'study_notes' está desatualizada. O script abaixo irá atualizá-la para suportar as funcionalidades mais recentes (como múltiplos snippets de código) sem apagar seus dados.
         </p>
         <div className="mt-4">
             <pre className="bg-slate-800 text-white p-4 rounded-lg text-xs overflow-x-auto">
@@ -161,7 +145,8 @@ const StudyNotesApp: React.FC<{ currentUser: UserProfile }> = ({ currentUser }) 
         setDbError(false);
         const { data, error } = await supabase.from('study_notes').select('*').order('created_at', { ascending: false });
         if (error) {
-            if (error.code === '42P01' || error.message.toLowerCase().includes("could not find the 'code_snippets' column")) { 
+            const msg = error.message.toLowerCase();
+            if (error.code === '42P01' || (msg.includes("column") && msg.includes("does not exist"))) { 
                 setDbError(true); 
             } else { alert(`Erro: ${error.message}`); }
         } else { setNotes(data || []); }
@@ -176,10 +161,19 @@ const StudyNotesApp: React.FC<{ currentUser: UserProfile }> = ({ currentUser }) 
 
     const handleSave = async (noteData: Omit<StudyNote, 'id' | 'created_at' | 'user_email'>) => {
         const dataToSave = { ...noteData, user_email: currentUser.email };
-        let error;
-        if (editingNote) { ({ error } = await supabase.from('study_notes').update(dataToSave).eq('id', editingNote.id)); }
-        else { ({ error } = await supabase.from('study_notes').insert([dataToSave])); }
-        if (error) { alert(`Erro ao salvar: ${error.message}`); } else {
+        
+        const result = editingNote
+            ? await supabase.from('study_notes').update(dataToSave).eq('id', editingNote.id)
+            : await supabase.from('study_notes').insert([dataToSave]);
+
+        if (result.error) {
+            const msg = result.error.message.toLowerCase();
+            if (msg.includes("column") && msg.includes("does not exist")) {
+                 setDbError(true);
+            } else {
+                alert(`Erro ao salvar: ${result.error.message}`);
+            }
+        } else {
             fetchNotes();
         }
     };
