@@ -116,6 +116,27 @@ const NoteForm: React.FC<{
     );
 };
 
+// Helper function to map common language names to highlight.js class names
+const getHighlightLanguage = (lang: string | null | undefined): string => {
+    if (!lang) return 'plaintext';
+    const lowerLang = lang.toLowerCase().trim();
+    switch (lowerLang) {
+        case 'c#':
+            return 'csharp';
+        case 'js':
+            return 'javascript';
+        case 'ts':
+            return 'typescript';
+        case 'py':
+            return 'python';
+        case 'html':
+            return 'xml'; // highlight.js uses 'xml' for HTML
+        // Add more aliases if needed
+        default:
+            return lowerLang;
+    }
+};
+
 const StudyNotesApp: React.FC<{ currentUser: UserProfile }> = ({ currentUser }) => {
     const [notes, setNotes] = useState<StudyNote[]>([]);
     const [selectedNote, setSelectedNote] = useState<StudyNote | null>(null);
@@ -251,7 +272,7 @@ const StudyNotesApp: React.FC<{ currentUser: UserProfile }> = ({ currentUser }) 
                                             {copiedSnippet === index ? 'Copiado!' : 'Copiar'}
                                         </Button>
                                         <pre className="text-sm whitespace-pre-wrap bg-slate-950 p-4 rounded-md border border-slate-700 overflow-x-auto">
-                                            <code className={`language-${selectedNote.language?.toLowerCase() || 'plaintext'}`}>
+                                            <code className={`language-${getHighlightLanguage(selectedNote.language)}`}>
                                                 {snippet}
                                             </code>
                                         </pre>
