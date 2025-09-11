@@ -230,9 +230,9 @@ export const BookmarkIcon: React.FC<IconProps> = ({ className, ...props }) => (
     </svg>
 );
 
-export const BriefcaseIcon: React.FC<IconProps> = ({ className, ...props }) => (
+export const CodeBracketIcon: React.FC<IconProps> = ({ className, ...props }) => (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className} {...props}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 14.15v4.07a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18.22V14.15M16.5 18.75h-9M12.75 11.25l-1.5 1.5-1.5-1.5M12 3.75l-7.5 4.5 7.5 4.5 7.5-4.5-7.5-4.5Z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3-4.5 16.5" />
     </svg>
 );
 

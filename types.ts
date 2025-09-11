@@ -2,7 +2,7 @@
 
 // --- Core Types ---
 export type Role = 'admin' | 'partner' | 'parent' | 'visitor';
-export type View = 'dashboard' | 'restaurants' | 'expenses' | 'recipes' | 'reminders' | 'wellness' | 'lists' | 'applications' | 'admin' | 'ai-recommender' | 'travel';
+export type View = 'dashboard' | 'restaurants' | 'expenses' | 'recipes' | 'reminders' | 'wellness' | 'lists' | 'study-notes' | 'admin' | 'ai-recommender' | 'travel';
 
 // This is the primary user object for the currently logged-in user.
 export interface UserProfile {
@@ -284,18 +284,19 @@ export interface ListItem {
     is_done: boolean;
 }
 
-// --- New: Job Applications ---
-export type ApplicationStatus = 'Applied' | 'Interviewing' | 'Offer' | 'Rejected' | 'Follow-up';
+// --- New: Study Notes ---
+export type ConfidenceLevel = 1 | 2 | 3 | 4 | 5;
 
-export interface JobApplication {
+export interface StudyNote {
     id: string;
     created_at: string;
-    company_name: string;
-    role_name: string;
-    status: ApplicationStatus;
-    notes: string | null;
-    image_url: string | null; // URL for the screenshot
+    title: string;
+    content: string;
+    language: string | null;
+    tags: string[] | null;
     user_email: string;
+    confidence_level: ConfidenceLevel | null;
+    code_snippet: string | null;
 }
 
 // --- New: AI Recommender ---

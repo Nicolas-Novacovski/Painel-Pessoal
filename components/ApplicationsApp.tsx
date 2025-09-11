@@ -1,94 +1,46 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../utils/supabase';
-import { UserProfile, JobApplication, ApplicationStatus } from '../types';
-import { compressImage, slugify } from '../utils/helpers';
+import { UserProfile, StudyNote, ConfidenceLevel } from '../types';
 import { Button, Input, Modal } from './UIComponents';
-import { PlusIcon, TrashIcon, PencilIcon } from './Icons';
+import { PlusIcon, TrashIcon, PencilIcon, CodeBracketIcon } from './Icons';
 
-const STATUS_OPTIONS: ApplicationStatus[] = ['Applied', 'Interviewing', 'Offer', 'Rejected', 'Follow-up'];
-
-const statusColors: Record<ApplicationStatus, string> = {
-    Applied: 'bg-blue-100 text-blue-800',
-    Interviewing: 'bg-yellow-100 text-yellow-800',
-    Offer: 'bg-green-100 text-green-800',
-    Rejected: 'bg-red-100 text-red-800',
-    'Follow-up': 'bg-purple-100 text-purple-800',
-};
-
-const APPLICATIONS_SETUP_SQL = `
--- SCRIPT DE CONFIGURAÇÃO COMPLETO: TABELA DE APLICAÇÕES E PERMISSÕES DE UPLOAD
--- Este script resolve tanto erros de 'tabela não existe' quanto falhas de upload de imagem.
+const STUDY_NOTES_SETUP_SQL = `
+-- SCRIPT DE CONFIGURAÇÃO PARA A TABELA 'study_notes'
+-- Este script apaga a antiga tabela 'job_applications' e cria a nova.
 BEGIN;
 
--- --- CONFIGURAÇÃO DA TABELA 'job_applications' ---
-
--- 1. Apaga a tabela antiga para garantir uma configuração limpa.
+-- 1. Apaga a tabela antiga, se existir.
 DROP TABLE IF EXISTS public.job_applications CASCADE;
 
--- 2. Recria a tabela com as colunas necessárias.
-CREATE TABLE public.job_applications (
+-- 2. Cria a nova tabela 'study_notes' com todas as colunas necessárias.
+CREATE TABLE IF NOT EXISTS public.study_notes (
     id uuid NOT NULL DEFAULT gen_random_uuid(),
     created_at timestamptz NOT NULL DEFAULT now(),
-    company_name text NOT NULL,
-    role_name text NOT NULL,
-    status text NOT NULL,
-    notes text NULL,
-    image_url text NULL,
+    title text NOT NULL,
+    content text NOT NULL,
+    language text NULL,
+    tags jsonb NULL,
     user_email text NOT NULL,
-    CONSTRAINT job_applications_pkey PRIMARY KEY (id)
+    confidence_level smallint NULL,
+    code_snippet text NULL,
+    CONSTRAINT study_notes_pkey PRIMARY KEY (id)
 );
 
--- 3. DESABILITA RLS para a tabela, que era a causa de erros de salvamento.
--- A segurança é garantida pela interface do aplicativo.
-ALTER TABLE public.job_applications DISABLE ROW LEVEL SECURITY;
-
-
--- --- CONFIGURAÇÃO DAS PERMISSÕES DO BUCKET DE IMAGENS ---
--- Estas políticas garantem que o aplicativo possa fazer upload e exibir imagens.
-
--- 4. Permite que qualquer pessoa VEJA as imagens no bucket 'job-application-images'.
--- Apaga a política antiga se existir para evitar conflitos.
-DROP POLICY IF EXISTS "Public Read for Job App Images" ON storage.objects;
-CREATE POLICY "Public Read for Job App Images"
-ON storage.objects
-FOR SELECT
-USING (bucket_id = 'job-application-images');
-
--- 5. Permite que qualquer pessoa FAÇA UPLOAD de imagens no bucket.
-DROP POLICY IF EXISTS "Public Upload for Job App Images" ON storage.objects;
-CREATE POLICY "Public Upload for Job App Images"
-ON storage.objects
-FOR INSERT
-WITH CHECK (bucket_id = 'job-application-images');
-
--- 6. Permite que qualquer pessoa APAGUE/ATUALIZE imagens no bucket.
-DROP POLICY IF EXISTS "Public Update for Job App Images" ON storage.objects;
-CREATE POLICY "Public Update for Job App Images"
-ON storage.objects
-FOR UPDATE
-USING (bucket_id = 'job-application-images');
-
-DROP POLICY IF EXISTS "Public Delete for Job App Images" ON storage.objects;
-CREATE POLICY "Public Delete for Job App Images"
-ON storage.objects
-FOR DELETE
-USING (bucket_id = 'job-application-images');
+-- 3. Desabilita RLS para a tabela. A segurança é garantida pela interface do app.
+ALTER TABLE public.study_notes DISABLE ROW LEVEL SECURITY;
 
 COMMIT;
 `;
 
-
 const DatabaseErrorResolver: React.FC = () => (
-    <div className="p-4 m-6 bg-red-50 border-2 border-dashed border-red-200 rounded-lg">
+    <div className="p-4 m-6 bg-red-50 border-2 border-dashed border-red-200 rounded-lg text-slate-800">
         <h4 className="font-semibold text-red-900">Configuração Necessária</h4>
         <p className="text-sm text-red-800 mt-1">
-            A funcionalidade de 'Aplicações' não pode ser carregada ou salva. Isso geralmente ocorre por uma tabela ausente, permissões de banco de dados (RLS) incorretas, ou permissões de upload de imagem ausentes.
-            <br/>
-            O script abaixo resolve <strong>todos</strong> esses problemas de uma vez.
+            A funcionalidade de 'Anotações' precisa de uma nova tabela no banco de dados. O script abaixo irá remover a antiga tabela de aplicações e criar a nova estrutura.
         </p>
         <div className="mt-4">
             <pre className="bg-slate-800 text-white p-4 rounded-lg text-xs overflow-x-auto">
-                <code>{APPLICATIONS_SETUP_SQL.trim()}</code>
+                <code>{STUDY_NOTES_SETUP_SQL.trim()}</code>
             </pre>
             <p className="text-xs text-slate-600 mt-2">
                 Copie o código, cole no <a href="https://supabase.com/dashboard/project/_/sql" target="_blank" rel="noopener noreferrer" className="font-semibold text-primary hover:underline">Editor SQL</a> do seu painel Supabase, clique em "RUN" e, em seguida, <strong>recarregue esta página</strong>.
@@ -97,208 +49,192 @@ const DatabaseErrorResolver: React.FC = () => (
     </div>
 );
 
-
-// Form for adding/editing an application
-const ApplicationForm: React.FC<{
-    onSave: (app: Omit<JobApplication, 'id' | 'created_at' | 'user_email'>, file: File | null) => Promise<void>;
+const NoteForm: React.FC<{
+    onSave: (note: Omit<StudyNote, 'id' | 'created_at' | 'user_email'>) => Promise<void>;
     onClose: () => void;
-    initialData?: JobApplication | null;
+    initialData?: StudyNote | null;
 }> = ({ onSave, onClose, initialData }) => {
-    const [companyName, setCompanyName] = useState('');
-    const [roleName, setRoleName] = useState('');
-    const [status, setStatus] = useState<ApplicationStatus>('Applied');
-    const [notes, setNotes] = useState('');
-    const [imageFile, setImageFile] = useState<File | null>(null);
-    const [imagePreview, setImagePreview] = useState<string | null>(null);
+    const [title, setTitle] = useState('');
+    const [language, setLanguage] = useState('');
+    const [tags, setTags] = useState('');
+    const [content, setContent] = useState('');
+    const [codeSnippet, setCodeSnippet] = useState('');
+    const [confidenceLevel, setConfidenceLevel] = useState<ConfidenceLevel | null>(null);
     const [isSaving, setIsSaving] = useState(false);
 
     useEffect(() => {
         if (initialData) {
-            setCompanyName(initialData.company_name);
-            setRoleName(initialData.role_name);
-            setStatus(initialData.status);
-            setNotes(initialData.notes || '');
-            setImagePreview(initialData.image_url || null);
+            setTitle(initialData.title);
+            setLanguage(initialData.language || '');
+            setTags((initialData.tags || []).join(', '));
+            setContent(initialData.content);
+            setCodeSnippet(initialData.code_snippet || '');
+            setConfidenceLevel(initialData.confidence_level || null);
         }
     }, [initialData]);
 
-    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            const compressed = await compressImage(file, 1280);
-            setImageFile(compressed);
-            const reader = new FileReader();
-            reader.onloadend = () => setImagePreview(reader.result as string);
-            reader.readAsDataURL(compressed);
-        }
-    };
-
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!companyName || !roleName) {
-            alert('Nome da empresa e da vaga são obrigatórios.');
+        if (!title || !content) {
+            alert('Título e Conteúdo são obrigatórios.');
             return;
         }
         setIsSaving(true);
         await onSave({
-            company_name: companyName,
-            role_name: roleName,
-            status,
-            notes,
-            image_url: initialData?.image_url || null, // Pass existing url to handle replacement logic
-        }, imageFile);
+            title,
+            language: language || null,
+            tags: tags.split(',').map(t => t.trim()).filter(Boolean),
+            content,
+            code_snippet: codeSnippet || null,
+            confidence_level: confidenceLevel,
+        });
         setIsSaving(false);
         onClose();
     };
-
+    
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
-            <Input value={companyName} onChange={e => setCompanyName(e.target.value)} placeholder="Nome da Empresa" required />
-            <Input value={roleName} onChange={e => setRoleName(e.target.value)} placeholder="Nome da Vaga" required />
-            <select value={status} onChange={e => setStatus(e.target.value as ApplicationStatus)} className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-900">
-                {STATUS_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-            </select>
-            <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Anotações (opcional)" rows={3} className="w-full p-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary" />
-            <Input type="file" accept="image/*" onChange={handleFileChange} />
-            {imagePreview && <img src={imagePreview} alt="Preview" className="w-full h-auto max-h-60 object-contain rounded-lg bg-slate-100" />}
+            <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Título do Conceito (Ex: React Hooks)" required />
+            <div className="grid grid-cols-2 gap-4">
+                <Input value={language} onChange={e => setLanguage(e.target.value)} placeholder="Linguagem/Tech (Ex: JavaScript)" />
+                <Input value={tags} onChange={e => setTags(e.target.value)} placeholder="Tags (separadas por vírgula)" />
+            </div>
+            <div>
+                <label className="text-sm font-medium text-slate-700">Nível de Confiança</label>
+                <div className="flex justify-between mt-1">
+                    {[1, 2, 3, 4, 5].map(level => (
+                        <button key={level} type="button" onClick={() => setConfidenceLevel(level as ConfidenceLevel)} className={`w-1/5 h-8 rounded-md transition-all ${confidenceLevel === level ? 'bg-cyan-400' : 'bg-slate-200 hover:bg-slate-300'}`}>
+                            {level}
+                        </button>
+                    ))}
+                </div>
+            </div>
+            <textarea value={content} onChange={e => setContent(e.target.value)} placeholder="Sua anotação aqui... use quebras de linha para formatar." rows={6} className="w-full p-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary font-mono" />
+            <textarea value={codeSnippet} onChange={e => setCodeSnippet(e.target.value)} placeholder="Trecho de código principal (opcional)" rows={4} className="w-full p-2 bg-slate-800 text-slate-200 border border-slate-600 rounded-lg focus:ring-2 focus:ring-primary font-mono" />
+            
             <div className="flex justify-end gap-3 pt-4 border-t">
                 <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>Cancelar</Button>
-                <Button type="submit" variant="primary" disabled={isSaving}>{isSaving ? 'Salvando...' : 'Salvar Aplicação'}</Button>
+                <Button type="submit" variant="primary" disabled={isSaving}>{isSaving ? 'Salvando...' : 'Salvar Anotação'}</Button>
             </div>
         </form>
     );
 };
 
-// Main component for the applications view
-const ApplicationsApp: React.FC<{ currentUser: UserProfile }> = ({ currentUser }) => {
-    const [applications, setApplications] = useState<JobApplication[]>([]);
+const StudyNotesApp: React.FC<{ currentUser: UserProfile }> = ({ currentUser }) => {
+    const [notes, setNotes] = useState<StudyNote[]>([]);
+    const [selectedNote, setSelectedNote] = useState<StudyNote | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [editingApp, setEditingApp] = useState<JobApplication | null>(null);
+    const [editingNote, setEditingNote] = useState<StudyNote | null>(null);
     const [dbError, setDbError] = useState(false);
 
-    const fetchApplications = useCallback(async () => {
+    const fetchNotes = useCallback(async () => {
         setIsLoading(true);
-        setDbError(false); // Reset error on fetch
-        const { data, error } = await supabase.from('job_applications').select('*').order('created_at', { ascending: false });
+        setDbError(false);
+        const { data, error } = await supabase.from('study_notes').select('*').order('created_at', { ascending: false });
         if (error) {
-            console.error('Error fetching applications:', error);
-            // 42P01: undefined_table
-            if (error.code === '42P01') {
-                setDbError(true);
-            } else {
-                alert(`Erro ao buscar aplicações: ${error.message}`);
-            }
-        } else {
-            setApplications(data || []);
-        }
+            if (error.code === '42P01') { setDbError(true); } else { alert(`Erro: ${error.message}`); }
+        } else { setNotes(data || []); }
         setIsLoading(false);
     }, []);
 
     useEffect(() => {
-        fetchApplications();
-    }, [fetchApplications]);
+        fetchNotes();
+        const channel = supabase.channel('realtime-study-notes').on('postgres_changes', { event: '*', schema: 'public', table: 'study_notes' }, fetchNotes).subscribe();
+        return () => { supabase.removeChannel(channel); };
+    }, [fetchNotes]);
 
-    const handleSave = async (appData: Omit<JobApplication, 'id' | 'created_at' | 'user_email'>, imageFile: File | null) => {
-        let imageUrl = appData.image_url;
-        
-        try {
-            if (imageFile) {
-                if (imageUrl) {
-                     const oldPath = new URL(imageUrl).pathname.split('/job-application-images/')[1];
-                     if (oldPath) await supabase.storage.from('job-application-images').remove([oldPath]);
-                }
-                const fileName = `${slugify(appData.company_name)}-${Date.now()}.jpg`;
-                const { data: uploadData, error: uploadError } = await supabase.storage.from('job-application-images').upload(fileName, imageFile);
-                if(uploadError) throw uploadError;
-                imageUrl = supabase.storage.from('job-application-images').getPublicUrl(uploadData.path).data.publicUrl;
-            }
-
-            const dataToSave = { ...appData, image_url: imageUrl, user_email: currentUser.email };
-            let error;
-            if (editingApp) {
-                ({ error } = await supabase.from('job_applications').update(dataToSave).eq('id', editingApp.id));
-            } else {
-                ({ error } = await supabase.from('job_applications').insert([dataToSave]));
-            }
-
-            if (error) throw error;
-            fetchApplications();
-
-        } catch (err: any) {
-            console.error("Save error:", err);
-            const message = (err.message || '').toLowerCase();
-            if (
-                message.includes('violates row-level security policy') || // Catches RLS on table and storage
-                message.includes('bucket not found') || // Catches storage setup error
-                err?.code === '42501' // permission denied
-            ) {
-                setDbError(true); // Trigger the setup guide on RLS/Storage error
-            } else {
-                alert(`Falha ao salvar: ${err.message}`);
-            }
+    const handleSave = async (noteData: Omit<StudyNote, 'id' | 'created_at' | 'user_email'>) => {
+        const dataToSave = { ...noteData, user_email: currentUser.email };
+        let error;
+        if (editingNote) { ({ error } = await supabase.from('study_notes').update(dataToSave).eq('id', editingNote.id)); }
+        else { ({ error } = await supabase.from('study_notes').insert([dataToSave])); }
+        if (error) { alert(`Erro ao salvar: ${error.message}`); } else {
+            fetchNotes();
         }
     };
-    
-    const handleDelete = async (app: JobApplication) => {
-        if(window.confirm('Tem certeza que deseja apagar esta aplicação?')) {
-            if (app.image_url) {
-                const oldPath = new URL(app.image_url).pathname.split('/job-application-images/')[1];
-                if (oldPath) await supabase.storage.from('job-application-images').remove([oldPath]);
-            }
-            await supabase.from('job_applications').delete().eq('id', app.id);
-            fetchApplications();
+
+    const handleDelete = async (id: string) => {
+        if (window.confirm('Apagar esta anotação?')) {
+            await supabase.from('study_notes').delete().eq('id', id);
+            if (selectedNote?.id === id) setSelectedNote(null);
+            fetchNotes();
         }
     };
-    
-    if (dbError) {
-        return <DatabaseErrorResolver />;
-    }
+
+    if (dbError) return <DatabaseErrorResolver />;
 
     return (
-        <div className="container mx-auto p-4 sm:p-6">
-            <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-dark">Minhas Aplicações de Emprego</h2>
-                {currentUser.role === 'admin' && (
-                    <Button onClick={() => { setEditingApp(null); setIsModalOpen(true); }}><PlusIcon className="w-5 h-5"/> Nova Aplicação</Button>
-                )}
-            </div>
-            
-            {isLoading && <p>Carregando...</p>}
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {applications.map(app => (
-                    <div key={app.id} className="bg-white rounded-xl shadow-subtle overflow-hidden">
-                        {app.image_url && <img src={app.image_url} alt={`Screenshot for ${app.company_name}`} className="w-full h-48 object-cover bg-slate-200" />}
-                        <div className="p-4">
-                            <div className="flex justify-between items-start">
-                                <div>
-                                    <h3 className="font-bold text-lg text-dark">{app.company_name}</h3>
-                                    <p className="text-slate-600">{app.role_name}</p>
+        <div className="h-screen w-full flex bg-slate-900 text-slate-300 font-mono">
+            <aside className="w-1/3 max-w-sm flex-shrink-0 bg-slate-800/50 flex flex-col h-full border-r border-slate-700">
+                <div className="p-4 border-b border-slate-700 flex justify-between items-center">
+                    <h2 className="text-xl font-bold text-white">Anotações</h2>
+                    <Button onClick={() => { setEditingNote(null); setIsModalOpen(true); }} size="sm" variant="primary" className="!bg-cyan-500 hover:!bg-cyan-600 !text-black">
+                        <PlusIcon className="w-5 h-5"/> Novo
+                    </Button>
+                </div>
+                <div className="flex-grow overflow-y-auto">
+                    {isLoading && <p className="p-4 text-slate-400">Carregando...</p>}
+                    {notes.map(note => (
+                        <button key={note.id} onClick={() => setSelectedNote(note)} className={`w-full text-left p-4 border-b border-slate-700/50 transition-colors ${selectedNote?.id === note.id ? 'bg-slate-700/50' : 'hover:bg-slate-800'}`}>
+                            <h3 className="font-bold text-white truncate">{note.title}</h3>
+                            <p className="text-sm text-cyan-400 truncate">{note.language}</p>
+                        </button>
+                    ))}
+                </div>
+            </aside>
+            <main className="flex-grow p-8 overflow-y-auto">
+                {selectedNote ? (
+                    <div className="animate-fade-in">
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <h1 className="text-4xl font-bold text-white mb-2">{selectedNote.title}</h1>
+                                <div className="flex items-center gap-4">
+                                    <span className="text-cyan-400 font-semibold">{selectedNote.language}</span>
+                                    <div className="flex gap-2">
+                                        {(selectedNote.tags || []).map(tag => <span key={tag} className="px-2 py-0.5 text-xs font-semibold text-pink-300 bg-pink-900/50 rounded-full">{tag}</span>)}
+                                    </div>
                                 </div>
-                                <span className={`text-xs font-bold px-2 py-1 rounded-full ${statusColors[app.status]}`}>{app.status}</span>
                             </div>
-                             {app.notes && <p className="text-sm text-slate-500 mt-2 pt-2 border-t">{app.notes}</p>}
-                             <div className="text-xs text-slate-400 mt-2 pt-2 border-t flex justify-between items-center">
-                               <span>Aplicado em: {new Date(app.created_at).toLocaleDateString()}</span>
-                               {currentUser.role === 'admin' && (
-                                   <div>
-                                       <Button variant="ghost" size="sm" onClick={() => { setEditingApp(app); setIsModalOpen(true); }}><PencilIcon className="w-4 h-4"/></Button>
-                                       <Button variant="ghost" size="sm" onClick={() => handleDelete(app)}><TrashIcon className="w-4 h-4 text-red-500"/></Button>
-                                   </div>
-                               )}
+                            <div className="flex gap-2">
+                                <Button onClick={() => { setEditingNote(selectedNote); setIsModalOpen(true); }} variant="secondary"><PencilIcon className="w-4 h-4"/> Editar</Button>
+                                <Button onClick={() => handleDelete(selectedNote.id)} variant="danger"><TrashIcon className="w-4 h-4"/></Button>
                             </div>
                         </div>
+                        {selectedNote.confidence_level && (
+                            <div className="mt-4">
+                                <label className="text-sm text-slate-400">Confiança:</label>
+                                <div className="flex gap-1 mt-1">
+                                    {[...Array(5)].map((_, i) => <div key={i} className={`h-2 w-full rounded-full ${i < selectedNote.confidence_level! ? 'bg-cyan-400' : 'bg-slate-700'}`}></div>)}
+                                </div>
+                            </div>
+                        )}
+                        <div className="mt-8">
+                            <h2 className="text-lg font-semibold text-slate-400 mb-2">// Anotações</h2>
+                            <pre className="text-slate-300 whitespace-pre-wrap bg-slate-800/50 p-4 rounded-md font-sans">{selectedNote.content}</pre>
+                        </div>
+                         {selectedNote.code_snippet && (
+                            <div className="mt-6">
+                                <h2 className="text-lg font-semibold text-slate-400 mb-2">// Código</h2>
+                                <pre className="text-slate-300 whitespace-pre-wrap bg-slate-950 p-4 rounded-md border border-slate-700">{selectedNote.code_snippet}</pre>
+                            </div>
+                        )}
                     </div>
-                ))}
-            </div>
+                ) : (
+                    <div className="h-full flex flex-col items-center justify-center text-slate-500 text-center">
+                        <CodeBracketIcon className="w-16 h-16 mb-4"/>
+                        <h2 className="text-2xl font-bold text-slate-300">Seu Caderno Digital</h2>
+                        <p>Selecione uma anotação na lista ou crie uma nova para começar.</p>
+                    </div>
+                )}
+            </main>
             {isModalOpen && (
-                 <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingApp ? "Editar Aplicação" : "Nova Aplicação"}>
-                    <ApplicationForm onSave={handleSave} onClose={() => setIsModalOpen(false)} initialData={editingApp} />
+                 <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingNote ? "Editar Anotação" : "Nova Anotação de Estudo"}>
+                    <NoteForm onSave={handleSave} onClose={() => setIsModalOpen(false)} initialData={editingNote} />
                 </Modal>
             )}
         </div>
     );
 };
 
-export default ApplicationsApp;
+export default StudyNotesApp;

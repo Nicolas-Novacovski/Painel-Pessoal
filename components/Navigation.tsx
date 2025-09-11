@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { UserProfile, View } from '../types';
-import { HomeIcon, RestaurantIcon, CreditCardIcon, BookOpenIcon, BellIcon, HeartPulseIcon, ArrowLeftOnRectangleIcon, BookmarkIcon, BriefcaseIcon, ShieldCheckIcon, SparklesIcon, PaperAirplaneIcon, XMarkIcon, Bars3Icon } from './Icons';
+import { HomeIcon, RestaurantIcon, CreditCardIcon, BookOpenIcon, BellIcon, HeartPulseIcon, ArrowLeftOnRectangleIcon, BookmarkIcon, CodeBracketIcon, ShieldCheckIcon, SparklesIcon, PaperAirplaneIcon, XMarkIcon, Bars3Icon } from './Icons';
 import { Button } from './UIComponents';
 
 interface NavigationProps {
@@ -20,7 +20,7 @@ const navItems: { label: string; view: View; icon: React.FC<any> }[] = [
     { label: 'Receitas', view: 'recipes', icon: BookOpenIcon },
     { label: 'Lembretes', view: 'reminders', icon: BellIcon },
     { label: 'Bem-Estar', view: 'wellness', icon: HeartPulseIcon },
-    { label: 'Aplicações', view: 'applications', icon: BriefcaseIcon },
+    { label: 'Anotações', view: 'study-notes', icon: CodeBracketIcon },
     { label: 'Admin', view: 'admin', icon: ShieldCheckIcon },
 ];
 
@@ -33,9 +33,9 @@ const DesktopSidebar: React.FC<NavigationProps> = ({ activeView, setActiveView, 
         }
         // Fallback for non-migrated users
         const legacyAllowed: Record<UserProfile['role'], View[]> = {
-           admin: ['dashboard', 'restaurants', 'ai-recommender', 'travel', 'expenses', 'recipes', 'reminders', 'wellness', 'lists', 'applications', 'admin'],
-           partner: ['dashboard', 'restaurants', 'ai-recommender', 'travel', 'expenses', 'recipes', 'reminders', 'wellness', 'lists'],
-           parent: ['applications'],
+           admin: ['dashboard', 'restaurants', 'ai-recommender', 'travel', 'expenses', 'recipes', 'reminders', 'wellness', 'lists', 'study-notes', 'admin'],
+           partner: ['dashboard', 'restaurants', 'ai-recommender', 'travel', 'expenses', 'recipes', 'reminders', 'wellness', 'lists', 'study-notes'],
+           parent: ['study-notes'],
            visitor: ['restaurants'],
         };
         return navItems.filter(item => (legacyAllowed[currentUser.role] || []).includes(item.view));
@@ -93,9 +93,9 @@ const MobileSidebar: React.FC<Omit<NavigationProps, 'activeView' | 'setActiveVie
             return navItems.filter(item => allowed.includes(item.view));
         }
         const legacyAllowed: Record<UserProfile['role'], View[]> = {
-           admin: ['dashboard', 'restaurants', 'ai-recommender', 'travel', 'expenses', 'recipes', 'reminders', 'wellness', 'lists', 'applications', 'admin'],
-           partner: ['dashboard', 'restaurants', 'ai-recommender', 'travel', 'expenses', 'recipes', 'reminders', 'wellness', 'lists'],
-           parent: ['applications'],
+           admin: ['dashboard', 'restaurants', 'ai-recommender', 'travel', 'expenses', 'recipes', 'reminders', 'wellness', 'lists', 'study-notes', 'admin'],
+           partner: ['dashboard', 'restaurants', 'ai-recommender', 'travel', 'expenses', 'recipes', 'reminders', 'wellness', 'lists', 'study-notes'],
+           parent: ['study-notes'],
            visitor: ['restaurants'],
         };
         return navItems.filter(item => (legacyAllowed[currentUser.role] || []).includes(item.view));

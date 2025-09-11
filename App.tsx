@@ -13,7 +13,7 @@ import Dashboard from './components/Dashboard';
 import Navigation from './components/Navigation';
 import LoginScreen from './components/LoginScreen';
 import ListsApp from './components/ListsApp';
-import ApplicationsApp from './components/ApplicationsApp';
+import StudyNotesApp from './components/ApplicationsApp';
 import AdminApp from './components/AdminApp';
 import AIRecommenderApp from './components/AIRecommenderApp';
 import TravelApp from './components/TravelApp';
@@ -143,9 +143,9 @@ const App: React.FC = () => {
             // Fallback for users migrated from role-based system without allowed_views yet
             if (allowedViews.length === 0) {
                  const legacyAllowed: Record<UserProfile['role'], View[]> = {
-                    admin: ['dashboard', 'restaurants', 'ai-recommender', 'travel', 'expenses', 'recipes', 'reminders', 'wellness', 'lists', 'applications', 'admin'],
-                    partner: ['dashboard', 'restaurants', 'ai-recommender', 'travel', 'expenses', 'recipes', 'reminders', 'wellness', 'lists'],
-                    parent: ['applications'],
+                    admin: ['dashboard', 'restaurants', 'ai-recommender', 'travel', 'expenses', 'recipes', 'reminders', 'wellness', 'lists', 'study-notes', 'admin'],
+                    partner: ['dashboard', 'restaurants', 'ai-recommender', 'travel', 'expenses', 'recipes', 'reminders', 'wellness', 'lists', 'study-notes'],
+                    parent: ['study-notes'],
                     visitor: ['restaurants'],
                 };
                 const fallbackViews = legacyAllowed[currentUser.role] || ['restaurants'];
@@ -179,9 +179,9 @@ const App: React.FC = () => {
         // Re-check access before rendering
         if (allowedViews.length === 0) {
              const legacyAllowed: Record<UserProfile['role'], View[]> = {
-                admin: ['dashboard', 'restaurants', 'ai-recommender', 'travel', 'expenses', 'recipes', 'reminders', 'wellness', 'lists', 'applications', 'admin'],
-                partner: ['dashboard', 'restaurants', 'ai-recommender', 'travel', 'expenses', 'recipes', 'reminders', 'wellness', 'lists'],
-                parent: ['applications'],
+                admin: ['dashboard', 'restaurants', 'ai-recommender', 'travel', 'expenses', 'recipes', 'reminders', 'wellness', 'lists', 'study-notes', 'admin'],
+                partner: ['dashboard', 'restaurants', 'ai-recommender', 'travel', 'expenses', 'recipes', 'reminders', 'wellness', 'lists', 'study-notes'],
+                parent: ['study-notes'],
                 visitor: ['restaurants'],
             };
             if (!legacyAllowed[currentUser.role].includes(view)) {
@@ -210,8 +210,8 @@ const App: React.FC = () => {
                 return <WellnessApp currentUser={currentUser.name as User} />;
             case 'lists':
                 return <ListsApp currentUser={currentUser} />;
-            case 'applications':
-                return <ApplicationsApp currentUser={currentUser} />;
+            case 'study-notes':
+                return <StudyNotesApp currentUser={currentUser} />;
             case 'admin':
                 return <AdminApp currentUser={currentUser} />;
             default:

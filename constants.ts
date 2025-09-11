@@ -24,6 +24,6 @@ export const ALL_VIEWS: { id: View; name: string; description: string }[] = [
     { id: 'recipes', name: 'Receitas', description: 'Livro de receitas do casal.' },
     { id: 'reminders', name: 'Lembretes', description: 'Post-its virtuais e calendário.' },
     { id: 'wellness', name: 'Bem-Estar', description: 'Acompanhamento de hábitos e humor.' },
-    { id: 'applications', name: 'Aplicações', description: 'Acompanhar aplicações de emprego.' },
+    { id: 'study-notes', name: 'Anotações de Estudo', description: 'Seu caderno digital de programação.' },
     { id: 'admin', name: 'Admin', description: 'Gerenciar usuários e permissões.' },
 ];

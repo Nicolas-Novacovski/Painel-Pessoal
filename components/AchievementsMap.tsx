@@ -11,38 +11,10 @@ import { StarRatingDisplay } from './UIComponents';
 import { averageRating } from '../utils/helpers';
 import { GoogleIcon, StarIcon } from './Icons';
 
-// FIX: Corrected module augmentation for leaflet.markercluster.
-// The original definitions were conflicting with existing types (likely from @types/leaflet.markercluster),
-// causing "Duplicate identifier" errors. The declarations for MarkerCluster and MarkerClusterGroup have been
-// removed, and the remaining augmentation now correctly references types from the `L` namespace and fixes
-// the signature for `iconCreateFunction`.
-declare module 'leaflet' {
-    interface MarkerClusterGroupOptions extends L.LayerOptions {
-        showCoverageOnHover?: boolean;
-        zoomToBoundsOnClick?: boolean;
-        spiderfyOnMaxZoom?: boolean;
-        removeOutsideVisibleBounds?: boolean;
-        animate?: boolean;
-        animateAddingMarkers?: boolean;
-        disableClusteringAtZoom?: number;
-        maxClusterRadius?: number | ((zoom: number) => number);
-        polygonOptions?: L.PolylineOptions;
-        singleMarkerMode?: boolean;
-        spiderfyDistanceMultiplier?: number;
-        spiderLegPolylineOptions?: L.PolylineOptions;
-        iconCreateFunction?: (cluster: L.MarkerCluster) => L.DivIcon | L.Icon;
-        chunkedLoading?: boolean;
-        chunkInterval?: number;
-        chunkDelay?: number;
-        chunkProgress?: (processed: number, total: number, time: number) => void;
-    }
-    
-    // The types L.MarkerCluster and L.MarkerClusterGroup are expected to be available from an installed types package.
-    // This function declaration makes L.markerClusterGroup available to TypeScript.
-    function markerClusterGroup(options?: MarkerClusterGroupOptions): L.MarkerClusterGroup;
-}
-
-
+// FIX: Removed manual module augmentation for 'leaflet'.
+// The augmentation was conflicting with types from '@types/leaflet.markercluster',
+// leading to an "Invalid module name in augmentation" compile error.
+// The types from the installed package are assumed to be sufficient.
 interface AchievementsMapProps {
     restaurants: (Restaurant & { is_favorited: boolean })[];
     onSelectRestaurant: (restaurant: Restaurant & { is_favorited: boolean }) => void;
