@@ -296,7 +296,7 @@ export interface StudyNote {
     tags: string[] | null;
     user_email: string;
     confidence_level: ConfidenceLevel | null;
-    code_snippet: string | null;
+    code_snippets: string[] | null;
 }
 
 // --- New: AI Recommender ---
@@ -404,5 +404,6 @@ declare global {
         google?: {
             accounts: GoogleAccounts;
         };
+        hljs?: any;
     }
 }

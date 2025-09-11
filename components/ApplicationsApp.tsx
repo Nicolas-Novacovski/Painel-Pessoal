@@ -6,7 +6,7 @@ import { PlusIcon, TrashIcon, PencilIcon, CodeBracketIcon } from './Icons';
 
 const STUDY_NOTES_SETUP_SQL = `
 -- SCRIPT DE CONFIGURAÇÃO PARA A TABELA 'study_notes'
--- Este script apaga a antiga tabela 'job_applications' e cria a nova.
+-- Este script apaga a antiga tabela 'job_applications' e cria a nova com suporte a múltiplos snippets.
 BEGIN;
 
 -- 1. Apaga a tabela antiga, se existir.
@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS public.study_notes (
     tags jsonb NULL,
     user_email text NOT NULL,
     confidence_level smallint NULL,
-    code_snippet text NULL,
+    code_snippets jsonb NULL, -- Alterado de 'code_snippet text' para 'code_snippets jsonb'
     CONSTRAINT study_notes_pkey PRIMARY KEY (id)
 );
 
@@ -58,9 +58,18 @@ const NoteForm: React.FC<{
     const [language, setLanguage] = useState(initialData?.language || '');
     const [tags, setTags] = useState((initialData?.tags || []).join(', '));
     const [content, setContent] = useState(initialData?.content || '');
-    const [codeSnippet, setCodeSnippet] = useState(initialData?.code_snippet || '');
+    const [codeSnippets, setCodeSnippets] = useState<string[]>(initialData?.code_snippets || ['']);
     const [confidenceLevel, setConfidenceLevel] = useState<ConfidenceLevel | null>(initialData?.confidence_level || null);
     const [isSaving, setIsSaving] = useState(false);
+
+    const handleSnippetChange = (index: number, value: string) => {
+        const newSnippets = [...codeSnippets];
+        newSnippets[index] = value;
+        setCodeSnippets(newSnippets);
+    };
+
+    const addSnippet = () => setCodeSnippets([...codeSnippets, '']);
+    const removeSnippet = (index: number) => setCodeSnippets(codeSnippets.filter((_, i) => i !== index));
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -74,7 +83,7 @@ const NoteForm: React.FC<{
             language: language.trim() || null,
             tags: tags.split(',').map(t => t.trim()).filter(Boolean),
             content: content.trim(),
-            code_snippet: codeSnippet.trim() || null,
+            code_snippets: codeSnippets.map(s => s.trim()).filter(Boolean),
             confidence_level: confidenceLevel,
         });
         setIsSaving(false);
@@ -85,7 +94,7 @@ const NoteForm: React.FC<{
         <form onSubmit={handleSubmit} className="space-y-4">
             <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Título do Conceito (Ex: React Hooks)" required />
             <div className="grid grid-cols-2 gap-4">
-                <Input value={language} onChange={e => setLanguage(e.target.value)} placeholder="Linguagem/Tech (Ex: JavaScript)" />
+                <Input value={language} onChange={e => setLanguage(e.target.value)} placeholder="Linguagem/Tech (Ex: javascript)" />
                 <Input value={tags} onChange={e => setTags(e.target.value)} placeholder="Tags (separadas por vírgula)" />
             </div>
             <div>
@@ -98,8 +107,22 @@ const NoteForm: React.FC<{
                     ))}
                 </div>
             </div>
-            <textarea value={content} onChange={e => setContent(e.target.value)} placeholder="Sua anotação aqui... use quebras de linha para formatar." rows={6} className="w-full p-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary font-mono" />
-            <textarea value={codeSnippet} onChange={e => setCodeSnippet(e.target.value)} placeholder="Trecho de código principal (opcional)" rows={4} className="w-full p-2 bg-slate-800 text-slate-200 border border-slate-600 rounded-lg focus:ring-2 focus:ring-primary font-mono" />
+            <textarea value={content} onChange={e => setContent(e.target.value)} placeholder="Sua anotação aqui... use quebras de linha para formatar." rows={6} className="w-full p-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary font-sans" />
+            
+            <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">Snippets de Código</label>
+                {codeSnippets.map((snippet, index) => (
+                    <div key={index} className="flex items-start gap-2">
+                        <textarea value={snippet} onChange={e => handleSnippetChange(index, e.target.value)} placeholder={`Trecho de código #${index + 1}`} rows={4} className="flex-grow p-2 bg-slate-800 text-slate-200 border border-slate-600 rounded-lg focus:ring-2 focus:ring-primary font-mono" />
+                        <Button type="button" variant="danger" size="sm" onClick={() => removeSnippet(index)} disabled={codeSnippets.length <= 1 && index === 0}>
+                            <TrashIcon className="w-4 h-4" />
+                        </Button>
+                    </div>
+                ))}
+                 <Button type="button" variant="secondary" size="sm" onClick={addSnippet}>
+                    <PlusIcon className="w-4 h-4"/> Adicionar Snippet
+                </Button>
+            </div>
             
             <div className="flex justify-end gap-3 pt-4 border-t">
                 <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>Cancelar</Button>
@@ -116,13 +139,31 @@ const StudyNotesApp: React.FC<{ currentUser: UserProfile }> = ({ currentUser }) 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingNote, setEditingNote] = useState<StudyNote | null>(null);
     const [dbError, setDbError] = useState(false);
+    const [copiedSnippet, setCopiedSnippet] = useState<number | null>(null);
+
+    useEffect(() => {
+        if (selectedNote && window.hljs) {
+            // Use a timeout to ensure the DOM has updated before highlighting
+            setTimeout(() => {
+                window.hljs.highlightAll();
+            }, 0);
+        }
+    }, [selectedNote]);
+
+    const handleCopy = (text: string, index: number) => {
+        navigator.clipboard.writeText(text);
+        setCopiedSnippet(index);
+        setTimeout(() => setCopiedSnippet(null), 2000);
+    };
 
     const fetchNotes = useCallback(async () => {
         setIsLoading(true);
         setDbError(false);
         const { data, error } = await supabase.from('study_notes').select('*').order('created_at', { ascending: false });
         if (error) {
-            if (error.code === '42P01') { setDbError(true); } else { alert(`Erro: ${error.message}`); }
+            if (error.code === '42P01' || error.message.toLowerCase().includes("could not find the 'code_snippets' column")) { 
+                setDbError(true); 
+            } else { alert(`Erro: ${error.message}`); }
         } else { setNotes(data || []); }
         setIsLoading(false);
     }, []);
@@ -202,10 +243,26 @@ const StudyNotesApp: React.FC<{ currentUser: UserProfile }> = ({ currentUser }) 
                             <h2 className="text-lg font-semibold text-slate-400 mb-2">// Anotações</h2>
                             <pre className="text-slate-300 whitespace-pre-wrap bg-slate-800/50 p-4 rounded-md font-sans">{selectedNote.content}</pre>
                         </div>
-                         {selectedNote.code_snippet && (
-                            <div className="mt-6">
-                                <h2 className="text-lg font-semibold text-slate-400 mb-2">// Código</h2>
-                                <pre className="text-slate-300 whitespace-pre-wrap bg-slate-950 p-4 rounded-md border border-slate-700">{selectedNote.code_snippet}</pre>
+                         {selectedNote.code_snippets && selectedNote.code_snippets.length > 0 && (
+                            <div className="mt-6 space-y-4">
+                                <h2 className="text-lg font-semibold text-slate-400">// Código</h2>
+                                {selectedNote.code_snippets.map((snippet, index) => (
+                                    <div key={index} className="relative group">
+                                         <Button
+                                            size="sm"
+                                            variant="secondary"
+                                            className="!absolute !top-2 !right-2 !py-1 !px-2 !text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                                            onClick={() => handleCopy(snippet, index)}
+                                        >
+                                            {copiedSnippet === index ? 'Copiado!' : 'Copiar'}
+                                        </Button>
+                                        <pre className="text-sm whitespace-pre-wrap bg-slate-950 p-4 rounded-md border border-slate-700 overflow-x-auto">
+                                            <code className={`language-${selectedNote.language?.toLowerCase() || 'plaintext'}`}>
+                                                {snippet}
+                                            </code>
+                                        </pre>
+                                    </div>
+                                ))}
                             </div>
                         )}
                     </div>
