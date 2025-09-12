@@ -373,7 +373,7 @@ const StudyNotesApp: React.FC<{ currentUser: UserProfile }> = ({ currentUser }) 
                         {selectedNote.image_urls && selectedNote.image_urls.length > 0 && (
                             <div className="mt-6">
                                 <h2 className="text-lg font-semibold text-slate-400 mb-2">// Imagens</h2>
-                                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
+                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                                     {selectedNote.image_urls.map(url => (
                                         <div key={url} className="group relative aspect-square bg-slate-800 rounded-lg overflow-hidden cursor-pointer" onClick={() => setViewingImageUrl(url)}>
                                             <img src={url} alt="Diagrama" className="w-full h-full object-cover transition-transform group-hover:scale-105" />
