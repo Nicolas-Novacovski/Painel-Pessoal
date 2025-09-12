@@ -2,25 +2,48 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../utils/supabase';
 import { UserProfile, StudyNote, ConfidenceLevel } from '../types';
 import { Button, Input, Modal } from './UIComponents';
-import { PlusIcon, TrashIcon, PencilIcon, CodeBracketIcon } from './Icons';
+import { PlusIcon, TrashIcon, PencilIcon, CodeBracketIcon, CameraIcon, XMarkIcon } from './Icons';
+import { compressImage, slugify } from '../utils/helpers';
 
 const STUDY_NOTES_SETUP_SQL = `
--- SCRIPT DE ATUALIZAÇÃO PARA A TABELA 'study_notes'
--- Este script garante que sua tabela está atualizada para suportar múltiplos snippets de código, sem apagar seus dados.
+-- SCRIPT DE ATUALIZAÇÃO PARA 'study_notes'
+-- Garante que a tabela está atualizada para múltiplos snippets de código e imagens.
 -- É seguro executá-lo múltiplas vezes.
 
--- 1. Apaga a coluna antiga 'code_snippet' (singular, tipo TEXT) se ela existir.
+-- --- ATUALIZAÇÃO DE COLUNAS ---
+-- 1. Apaga a coluna antiga 'code_snippet' (singular) se ela existir.
 ALTER TABLE public.study_notes DROP COLUMN IF EXISTS code_snippet;
-
--- 2. Adiciona a nova coluna 'code_snippets' (plural, tipo JSONB) se ela não existir.
+-- 2. Adiciona a nova coluna 'code_snippets' (plural, JSONB) se ela não existir.
 ALTER TABLE public.study_notes ADD COLUMN IF NOT EXISTS code_snippets jsonb NULL;
+-- 3. Adiciona a coluna 'image_urls' (JSONB) para imagens se ela não existir.
+ALTER TABLE public.study_notes ADD COLUMN IF NOT EXISTS image_urls jsonb NULL;
+
+-- --- CONFIGURAÇÃO DO BUCKET DE IMAGENS ---
+-- 4. CRIE MANUALMENTE um bucket PÚBLICO no Supabase Storage chamado 'study-note-images'.
+
+-- 5. Execute este SQL para configurar as permissões de acesso público do bucket.
+DROP POLICY IF EXISTS "Public Read for Study Note Images" ON storage.objects;
+CREATE POLICY "Public Read for Study Note Images"
+ON storage.objects FOR SELECT
+USING (bucket_id = 'study-note-images');
+
+DROP POLICY IF EXISTS "Public Upload for Study Note Images" ON storage.objects;
+CREATE POLICY "Public Upload for Study Note Images"
+ON storage.objects FOR INSERT
+WITH CHECK (bucket_id = 'study-note-images');
+
+DROP POLICY IF EXISTS "Public Delete for Study Note Images" ON storage.objects;
+CREATE POLICY "Public Delete for Study Note Images"
+ON storage.objects FOR DELETE
+USING (bucket_id = 'study-note-images');
 `;
+
 
 const DatabaseErrorResolver: React.FC = () => (
     <div className="p-4 m-6 bg-red-50 border-2 border-dashed border-red-200 rounded-lg text-slate-800">
         <h4 className="font-semibold text-red-900">Configuração Necessária</h4>
         <p className="text-sm text-red-800 mt-1">
-            Sua tabela 'study_notes' está desatualizada. O script abaixo irá atualizá-la para suportar as funcionalidades mais recentes (como múltiplos snippets de código) sem apagar seus dados.
+            Sua tabela 'study_notes' está desatualizada. O script abaixo irá atualizá-la para suportar as funcionalidades mais recentes (como múltiplos snippets de código e imagens) sem apagar seus dados.
         </p>
         <div className="mt-4">
             <pre className="bg-slate-800 text-white p-4 rounded-lg text-xs overflow-x-auto">
@@ -34,7 +57,7 @@ const DatabaseErrorResolver: React.FC = () => (
 );
 
 const NoteForm: React.FC<{
-    onSave: (note: Omit<StudyNote, 'id' | 'created_at' | 'user_email'>) => Promise<void>;
+    onSave: (note: Omit<StudyNote, 'id' | 'created_at' | 'user_email'>, imageFiles: File[], remainingImageUrls: string[]) => Promise<void>;
     onClose: () => void;
     initialData?: StudyNote | null;
 }> = ({ onSave, onClose, initialData }) => {
@@ -44,7 +67,24 @@ const NoteForm: React.FC<{
     const [content, setContent] = useState(initialData?.content || '');
     const [codeSnippets, setCodeSnippets] = useState<string[]>(initialData?.code_snippets || ['']);
     const [confidenceLevel, setConfidenceLevel] = useState<ConfidenceLevel | null>(initialData?.confidence_level || null);
+    
+    // Image State
+    const [imageFiles, setImageFiles] = useState<File[]>([]);
+    const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+    const [existingImageUrls, setExistingImageUrls] = useState<string[]>([]);
+    
     const [isSaving, setIsSaving] = useState(false);
+    const [isCompressing, setIsCompressing] = useState(false);
+
+    useEffect(() => {
+        if (initialData) {
+            setExistingImageUrls(initialData.image_urls || []);
+        }
+        return () => {
+            // Cleanup object URLs on unmount
+            imagePreviews.forEach(url => URL.revokeObjectURL(url));
+        };
+    }, [initialData]);
 
     const handleSnippetChange = (index: number, value: string) => {
         const newSnippets = [...codeSnippets];
@@ -54,6 +94,35 @@ const NoteForm: React.FC<{
 
     const addSnippet = () => setCodeSnippets([...codeSnippets, '']);
     const removeSnippet = (index: number) => setCodeSnippets(codeSnippets.filter((_, i) => i !== index));
+
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(e.target.files || []);
+        if (files.length === 0) return;
+        setIsCompressing(true);
+        const compressedFiles: File[] = [];
+        const previews: string[] = [];
+        for (const file of files) {
+            try {
+                const compressed = await compressImage(file, 1280, 0.8);
+                compressedFiles.push(compressed);
+                previews.push(URL.createObjectURL(compressed));
+            } catch (err) { console.error("Error compressing file:", err); }
+        }
+        setImageFiles(prev => [...prev, ...compressedFiles]);
+        setImagePreviews(prev => [...prev, ...previews]);
+        setIsCompressing(false);
+        e.target.value = ''; // Allow re-selecting same files
+    };
+
+    const removeNewImage = (index: number) => {
+        URL.revokeObjectURL(imagePreviews[index]);
+        setImageFiles(prev => prev.filter((_, i) => i !== index));
+        setImagePreviews(prev => prev.filter((_, i) => i !== index));
+    };
+    
+    const removeExistingImage = (url: string) => {
+        setExistingImageUrls(prev => prev.filter(u => u !== url));
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -69,71 +138,80 @@ const NoteForm: React.FC<{
             content: content.trim(),
             code_snippets: codeSnippets.map(s => s.trim()).filter(Boolean),
             confidence_level: confidenceLevel,
-        });
+            image_urls: [], // Placeholder, will be managed in parent
+        }, imageFiles, existingImageUrls);
         setIsSaving(false);
         onClose();
     };
     
+    const isBusy = isSaving || isCompressing;
+    
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
-            <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Título do Conceito (Ex: React Hooks)" required />
+            <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Título do Conceito (Ex: React Hooks)" required disabled={isBusy} />
             <div className="grid grid-cols-2 gap-4">
-                <Input value={language} onChange={e => setLanguage(e.target.value)} placeholder="Linguagem/Tech (Ex: javascript)" />
-                <Input value={tags} onChange={e => setTags(e.target.value)} placeholder="Tags (separadas por vírgula)" />
+                <Input value={language} onChange={e => setLanguage(e.target.value)} placeholder="Linguagem/Tech (Ex: javascript)" disabled={isBusy} />
+                <Input value={tags} onChange={e => setTags(e.target.value)} placeholder="Tags (separadas por vírgula)" disabled={isBusy} />
             </div>
             <div>
                 <label className="text-sm font-medium text-slate-700">Nível de Confiança</label>
                 <div className="flex justify-between mt-1">
                     {[1, 2, 3, 4, 5].map(level => (
-                        <button key={level} type="button" onClick={() => setConfidenceLevel(level as ConfidenceLevel)} className={`w-1/5 h-8 rounded-md transition-all ${confidenceLevel === level ? 'bg-cyan-400' : 'bg-slate-200 hover:bg-slate-300'}`}>
+                        <button key={level} type="button" onClick={() => setConfidenceLevel(level as ConfidenceLevel)} className={`w-1/5 h-8 rounded-md transition-all ${confidenceLevel === level ? 'bg-cyan-400' : 'bg-slate-200 hover:bg-slate-300'}`} disabled={isBusy}>
                             {level}
                         </button>
                     ))}
                 </div>
             </div>
-            <textarea value={content} onChange={e => setContent(e.target.value)} placeholder="Sua anotação aqui... use quebras de linha para formatar." rows={6} className="w-full p-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary font-sans" />
+            <textarea value={content} onChange={e => setContent(e.target.value)} placeholder="Sua anotação aqui... use quebras de linha para formatar." rows={6} className="w-full p-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary font-sans" disabled={isBusy} />
             
             <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-700">Snippets de Código</label>
+                <h4 className="font-medium text-sm text-slate-700">Imagens/Diagramas</h4>
+                <label htmlFor="note-images" className={`w-full cursor-pointer justify-center p-3 text-base font-semibold transition-all duration-200 ease-in-out bg-slate-200 text-slate-800 hover:bg-slate-300 rounded-lg flex items-center gap-2 ${isBusy ? 'opacity-50' : ''}`}>
+                    <CameraIcon className="w-5 h-5"/>
+                    <span>{isCompressing ? 'Processando...' : 'Adicionar Imagens'}</span>
+                </label>
+                <input id="note-images" type="file" multiple accept="image/*" className="hidden" onChange={handleFileChange} disabled={isBusy} />
+
+                <div className="grid grid-cols-3 gap-2">
+                    {existingImageUrls.map(url => (
+                        <div key={url} className="relative group"><img src={url} className="w-full h-24 object-cover rounded" alt="Diagrama existente"/><button type="button" onClick={() => removeExistingImage(url)} className="absolute top-1 right-1 bg-black/50 p-1 rounded-full text-white opacity-0 group-hover:opacity-100"><XMarkIcon className="w-3 h-3"/></button></div>
+                    ))}
+                    {imagePreviews.map((previewUrl, index) => (
+                        <div key={previewUrl} className="relative group"><img src={previewUrl} className="w-full h-24 object-cover rounded" alt={`Nova imagem ${index + 1}`}/><button type="button" onClick={() => removeNewImage(index)} className="absolute top-1 right-1 bg-black/50 p-1 rounded-full text-white opacity-0 group-hover:opacity-100"><XMarkIcon className="w-3 h-3"/></button></div>
+                    ))}
+                </div>
+            </div>
+
+            <div className="space-y-2">
+                <h4 className="font-medium text-sm text-slate-700">Snippets de Código</h4>
                 {codeSnippets.map((snippet, index) => (
                     <div key={index} className="flex items-start gap-2">
-                        <textarea value={snippet} onChange={e => handleSnippetChange(index, e.target.value)} placeholder={`Trecho de código #${index + 1}`} rows={4} className="flex-grow p-2 bg-slate-800 text-slate-200 border border-slate-600 rounded-lg focus:ring-2 focus:ring-primary font-mono" />
-                        <Button type="button" variant="danger" size="sm" onClick={() => removeSnippet(index)} disabled={codeSnippets.length <= 1 && index === 0}>
-                            <TrashIcon className="w-4 h-4" />
-                        </Button>
+                        <textarea value={snippet} onChange={e => handleSnippetChange(index, e.target.value)} placeholder={`Trecho de código #${index + 1}`} rows={4} className="flex-grow p-2 bg-slate-800 text-slate-200 border border-slate-600 rounded-lg focus:ring-2 focus:ring-primary font-mono" disabled={isBusy} />
+                        <Button type="button" variant="danger" size="sm" onClick={() => removeSnippet(index)} disabled={(codeSnippets.length <= 1 && index === 0) || isBusy}><TrashIcon className="w-4 h-4" /></Button>
                     </div>
                 ))}
-                 <Button type="button" variant="secondary" size="sm" onClick={addSnippet}>
-                    <PlusIcon className="w-4 h-4"/> Adicionar Snippet
-                </Button>
+                 <Button type="button" variant="secondary" size="sm" onClick={addSnippet} disabled={isBusy}><PlusIcon className="w-4 h-4"/> Adicionar Snippet</Button>
             </div>
             
             <div className="flex justify-end gap-3 pt-4 border-t">
-                <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>Cancelar</Button>
-                <Button type="submit" variant="primary" disabled={isSaving}>{isSaving ? 'Salvando...' : 'Salvar Anotação'}</Button>
+                <Button type="button" variant="secondary" onClick={onClose} disabled={isBusy}>Cancelar</Button>
+                <Button type="submit" variant="primary" disabled={isBusy}>{isSaving ? 'Salvando...' : 'Salvar Anotação'}</Button>
             </div>
         </form>
     );
 };
 
-// Helper function to map common language names to highlight.js class names
 const getHighlightLanguage = (lang: string | null | undefined): string => {
     if (!lang) return 'plaintext';
     const lowerLang = lang.toLowerCase().trim();
     switch (lowerLang) {
-        case 'c#':
-            return 'csharp';
-        case 'js':
-            return 'javascript';
-        case 'ts':
-            return 'typescript';
-        case 'py':
-            return 'python';
-        case 'html':
-            return 'xml'; // highlight.js uses 'xml' for HTML
-        // Add more aliases if needed
-        default:
-            return lowerLang;
+        case 'c#': return 'csharp';
+        case 'js': return 'javascript';
+        case 'ts': return 'typescript';
+        case 'py': return 'python';
+        case 'html': return 'xml';
+        default: return lowerLang;
     }
 };
 
@@ -145,13 +223,11 @@ const StudyNotesApp: React.FC<{ currentUser: UserProfile }> = ({ currentUser }) 
     const [editingNote, setEditingNote] = useState<StudyNote | null>(null);
     const [dbError, setDbError] = useState(false);
     const [copiedSnippet, setCopiedSnippet] = useState<number | null>(null);
+    const [viewingImageUrl, setViewingImageUrl] = useState<string | null>(null);
 
     useEffect(() => {
         if (selectedNote && window.hljs) {
-            // Use a timeout to ensure the DOM has updated before highlighting
-            setTimeout(() => {
-                window.hljs.highlightAll();
-            }, 0);
+            setTimeout(() => { window.hljs.highlightAll(); }, 0);
         }
     }, [selectedNote]);
 
@@ -170,7 +246,13 @@ const StudyNotesApp: React.FC<{ currentUser: UserProfile }> = ({ currentUser }) 
             if (error.code === '42P01' || (msg.includes("column") && msg.includes("does not exist"))) { 
                 setDbError(true); 
             } else { alert(`Erro: ${error.message}`); }
-        } else { setNotes(data || []); }
+        } else {
+            if (data && data.length > 0 && data[0].image_urls === undefined) {
+                setDbError(true);
+            } else {
+                setNotes(data || []);
+            }
+        }
         setIsLoading(false);
     }, []);
 
@@ -180,29 +262,59 @@ const StudyNotesApp: React.FC<{ currentUser: UserProfile }> = ({ currentUser }) 
         return () => { supabase.removeChannel(channel); };
     }, [fetchNotes]);
 
-    const handleSave = async (noteData: Omit<StudyNote, 'id' | 'created_at' | 'user_email'>) => {
-        const dataToSave = { ...noteData, user_email: currentUser.email };
-        
-        const result = editingNote
-            ? await supabase.from('study_notes').update(dataToSave).eq('id', editingNote.id)
-            : await supabase.from('study_notes').insert([dataToSave]);
+    const handleSave = async (noteData: Omit<StudyNote, 'id' | 'created_at' | 'user_email'>, imageFiles: File[], remainingImageUrls: string[]) => {
+        try {
+            const deletedUrls = editingNote?.image_urls?.filter(url => !remainingImageUrls.includes(url)) || [];
+            if (deletedUrls.length > 0) {
+                const paths = deletedUrls.map(url => url.split('/study-note-images/')[1]);
+                await supabase.storage.from('study-note-images').remove(paths);
+            }
 
-        if (result.error) {
-            const msg = result.error.message.toLowerCase();
-            if (msg.includes("column") && msg.includes("does not exist")) {
+            const newImageUrls = await Promise.all(
+                imageFiles.map(async file => {
+                    const fileName = `${currentUser.email.split('@')[0]}-${slugify(noteData.title)}-${Date.now()}.jpg`;
+                    const { data, error } = await supabase.storage.from('study-note-images').upload(fileName, file);
+                    if (error) throw error;
+                    return supabase.storage.from('study-note-images').getPublicUrl(data.path).data.publicUrl;
+                })
+            );
+
+            const finalImageUrls = [...remainingImageUrls, ...newImageUrls];
+            const dataToSave = { ...noteData, user_email: currentUser.email, image_urls: finalImageUrls };
+
+            if (editingNote) {
+                const { data: updatedNote, error } = await supabase.from('study_notes').update(dataToSave).eq('id', editingNote.id).select().single();
+                if (error) throw error;
+                const updatedNotes = notes.map(n => n.id === updatedNote.id ? updatedNote : n);
+                setNotes(updatedNotes);
+                if (selectedNote?.id === updatedNote.id) {
+                    setSelectedNote(updatedNote);
+                }
+            } else {
+                const { data: newNote, error } = await supabase.from('study_notes').insert([dataToSave]).select().single();
+                if (error) throw error;
+                setNotes([newNote, ...notes]);
+                setSelectedNote(newNote);
+            }
+        } catch (err: any) {
+            const msg = (err.message || '').toLowerCase();
+            if (msg.includes("column") && msg.includes("does not exist") || msg.includes('bucket not found')) {
                  setDbError(true);
             } else {
-                alert(`Erro ao salvar: ${result.error.message}`);
+                alert(`Erro ao salvar: ${err.message}`);
             }
-        } else {
-            fetchNotes();
         }
     };
 
     const handleDelete = async (id: string) => {
         if (window.confirm('Apagar esta anotação?')) {
+            const noteToDelete = notes.find(n => n.id === id);
+            if (noteToDelete?.image_urls && noteToDelete.image_urls.length > 0) {
+                const paths = noteToDelete.image_urls.map(url => url.split('/study-note-images/')[1]);
+                await supabase.storage.from('study-note-images').remove(paths);
+            }
             await supabase.from('study_notes').delete().eq('id', id);
-            if (selectedNote?.id === id) setSelectedNote(null);
+            if (selectedNote?.id === id) setSelectedNote(notes.length > 1 ? notes.find(n => n.id !== id) || null : null);
             fetchNotes();
         }
     };
@@ -258,6 +370,18 @@ const StudyNotesApp: React.FC<{ currentUser: UserProfile }> = ({ currentUser }) 
                             <h2 className="text-lg font-semibold text-slate-400 mb-2">// Anotações</h2>
                             <pre className="text-slate-300 whitespace-pre-wrap bg-slate-800/50 p-4 rounded-md font-sans">{selectedNote.content}</pre>
                         </div>
+                        {selectedNote.image_urls && selectedNote.image_urls.length > 0 && (
+                            <div className="mt-6">
+                                <h2 className="text-lg font-semibold text-slate-400 mb-2">// Imagens</h2>
+                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                                    {selectedNote.image_urls.map(url => (
+                                        <div key={url} className="group relative aspect-video bg-slate-800 rounded-lg overflow-hidden cursor-pointer" onClick={() => setViewingImageUrl(url)}>
+                                            <img src={url} alt="Diagrama" className="w-full h-full object-contain transition-transform group-hover:scale-105" />
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                          {selectedNote.code_snippets && selectedNote.code_snippets.length > 0 && (
                             <div className="mt-6 space-y-4">
                                 <h2 className="text-lg font-semibold text-slate-400">// Código</h2>
@@ -294,6 +418,9 @@ const StudyNotesApp: React.FC<{ currentUser: UserProfile }> = ({ currentUser }) 
                     <NoteForm onSave={handleSave} onClose={() => setIsModalOpen(false)} initialData={editingNote} />
                 </Modal>
             )}
+            <Modal isOpen={!!viewingImageUrl} onClose={() => setViewingImageUrl(null)} title="Visualizar Imagem">
+                {viewingImageUrl && <img src={viewingImageUrl} alt="Visualização ampliada" className="w-full h-auto max-h-[85vh] object-contain"/>}
+            </Modal>
         </div>
     );
 };

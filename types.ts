@@ -297,6 +297,7 @@ export interface StudyNote {
     user_email: string;
     confidence_level: ConfidenceLevel | null;
     code_snippets: string[] | null;
+    image_urls: string[] | null;
 }
 
 // --- New: AI Recommender ---
